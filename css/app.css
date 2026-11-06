@@ -309,3 +309,16 @@ a.btn { text-decoration: none; color: var(--ink); }
 /* Onderdelen binnen Instellingen */
 .kop.sectie { margin: 18px 0 14px; }
 .sectie-titel { font-size: 26px; }
+.klaar-band.gevuld { border-left: 6px solid var(--yolk); animation: kaart-in .5s ease both; }
+.btn.groot { padding: 16px 26px; font-size: 1.15rem; }
+.klaar-band .btn:not(.accent) { color: var(--ink); }
+.idee-balk { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.idee-balk input { flex: 1 1 260px; min-width: 0; }
+.idee-uit:not(:empty) { margin-top: 12px; }
+.idee-uit .rij { animation: kaart-in .4s ease both; }
+.idee-uit .rij:nth-child(2) { animation-delay: 80ms; } .idee-uit .rij:nth-child(3) { animation-delay: 160ms; }
+.idee-laden { display: flex; gap: 8px; padding: 14px 4px; }
+.idee-laden span { width: 10px; height: 10px; border-radius: 50%; background: var(--yolk); animation: idee-puls 1s ease-in-out infinite; }
+.idee-laden span:nth-child(2) { animation-delay: .15s; } .idee-laden span:nth-child(3) { animation-delay: .3s; }
+@keyframes idee-puls { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .idee-laden span, .idee-uit .rij { animation: none; } }
