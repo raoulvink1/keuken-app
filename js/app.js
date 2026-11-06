@@ -351,7 +351,7 @@
       </div>
       ${huis ? `<details class="in-huis" style="margin-top:22px"><summary class="btn klein" style="list-style:none;display:inline-flex">Al in huis (${l.menu.huis.length + l.school.huis.length})</summary><div class="paneel" style="margin-top:10px">${huis}</div></details>` : ""}
       <div class="klaar-band"><div><b>${klaar ? "Lijst staat klaar voor je AH-mandje" : "Klaar met controleren?"}</b>
-        <p class="sub">${klaar ? (state.lijst.verstuurdOp ? "Doorgestuurd. Claude zet hem in je AH-mandje; afrekenen doe je daarna in de AH-app." : "Nog niet doorgestuurd. Stel bij Bijwerken een GitHub-sleutel in, of tik op Lijst kopiëren.") : "Zet de lijst klaar, dan gaat hij naar Claude voor je AH-mandje."}</p></div>
+        <p class="sub">${klaar ? (state.lijst.verstuurdOp ? "Doorgestuurd. Claude zet hem in je AH-mandje; afrekenen doe je daarna in de AH-app." : "Nog niet doorgestuurd. Stel bij Instellingen een GitHub-sleutel in, of tik op Lijst kopiëren.") : "Zet de lijst klaar, dan gaat hij naar Claude voor je AH-mandje."}</p></div>
         <div class="btn-rij">${klaar ? '<button class="btn klein" data-act="lijst-open">Weer aanpassen</button>' : '<button class="btn accent" data-act="lijst-klaar">Lijst klaarzetten</button>'}
         <a class="btn klein" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Open AH</a></div></div>`;
   };
@@ -451,7 +451,13 @@
     heropen() { const m = ui.week === "volgende" && state.volgende ? state.volgende : state.menu; m.status = "voorstel"; bewaar(); render(); },
     "naar-volgende"() { ui.week = "volgende"; ga("week"); },
     weektab(el) { ui.week = el.dataset.week; render(); },
-    instellingen() { instellingenSheet(); },
+    "inst-tab"(el) { ui.instTab = el.dataset.tab; render(); },
+    async "nu-controleren"() { const nieuw = await sync.haal(); render(); if (!nieuw) toast(sync.status === "aan" ? "Er is nog geen nieuw weekmenu." : `Controleren lukte niet: ${sync.fout}.`); },
+    "wis-token"() { try { localStorage.removeItem(GH_SLEUTEL); } catch {} render(); toast("GitHub-sleutel gewist."); },
+    volscherm() {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+      else document.documentElement.requestFullscreen?.().catch(() => toast("Volledig scherm is hier niet beschikbaar."));
+    },
     schrap(el) { const d = dagVan(el.dataset.datum); d.geschrapt = true; bewaar(); render(); toast(`${cap(dagNaam(d.datum))} geschrapt.`, () => { d.geschrapt = false; bewaar(); render(); }); },
     herstel(el) { dagVan(el.dataset.datum).geschrapt = false; bewaar(); render(); },
     wissel(el) {
@@ -486,7 +492,7 @@
       state.lijst.status = "klaar"; state.lijst.klaarOp = new Date().toISOString();
       state.lijst.bestelling = [...l.menu.koop.map((x) => ({ ...strip(x), groep: "menu" })), ...l.school.koop.map((x) => ({ ...strip(x), groep: "school" })), ...l.vaste.map((x) => ({ ...strip(x), groep: "huishouden" })), ...l.eigen.map((x) => ({ naam: x.naam, hoeveelheid: x.aantal, eenheid: "stuks", groep: "eigen" }))];
       bewaar(); render();
-      if (!gh.token()) { toast("Lijst staat klaar. Stel bij Bijwerken een GitHub-sleutel in om hem automatisch door te sturen."); return; }
+      if (!gh.token()) { toast("Lijst staat klaar. Stel bij Instellingen een GitHub-sleutel in om hem automatisch door te sturen."); return; }
       toast("Lijst wordt doorgestuurd…");
       try {
         await stuurDoor();
@@ -525,6 +531,11 @@
       const bestaand = state.lijst.items.find((i) => norm(i.naam) === norm(naam));
       if (bestaand) bestaand.aantal++; else state.lijst.items.push({ id: uid(), naam: cap(naam), aantal: 1 });
       bewaar(); render(); $("#eigen-naam")?.focus();
+    }
+    if (f.dataset.form === "token") {
+      const v = f.token.value.trim();
+      if (v) { try { localStorage.setItem(GH_SLEUTEL, v); } catch {} }
+      render(); toast(v ? "GitHub-sleutel opgeslagen." : "Niets gewijzigd.");
     }
     if (f.dataset.form === "school-item") {
       const naam = f.naam.value.trim(); if (!naam) return;
@@ -622,30 +633,37 @@
     }, "Voorraad bijgewerkt vanaf de tablet");
   }
 
-  function instellingenSheet() {
+  // ---------- Instellingen ----------
+  const INST_TABS = [["huishouden", "Huishouden"], ["school", "School"], ["app", "App en verbinding"]];
+  function alsSectie(html) {
+    // Maak van de paginakop van een onderdeel een sectiekop binnen Instellingen.
+    return html.replace(/<div class="eyebrow">[^<]*<\/div>/, "").replace("<h1>", '<h2 class="sectie-titel">').replace("</h1>", "</h2>").replace('<div class="kop">', '<div class="kop sectie">');
+  }
+  views.instellingen = function () {
+    ui.instTab ||= "huishouden";
+    const tabs = `<div class="btn-rij" role="tablist" style="margin-bottom:8px">${INST_TABS.map(([k, t]) => `<button class="btn klein ${ui.instTab === k ? "primair" : ""}" data-act="inst-tab" data-tab="${k}" role="tab" aria-selected="${ui.instTab === k}">${t}</button>`).join("")}</div>`;
+    const inhoud = ui.instTab === "school" ? alsSectie(views.school()) : ui.instTab === "app" ? appInstellingen() : alsSectie(views.huishouden());
+    return `<div class="kop"><div><div class="eyebrow">Huishouden, school en app</div><h1>Instellingen</h1></div></div>${tabs}<div class="inst-inhoud" data-tab="${ui.instTab}">${inhoud}</div>`;
+  };
+  function appInstellingen() {
     const status = sync.status === "aan" ? `Laatst gecontroleerd om ${sync.laatst.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.` : sync.status === "fout" ? `Controleren lukte niet: ${esc(sync.fout)}.` : "Nog niet gecontroleerd.";
     const v = state.volgende;
-    sheet("Weekmenu ophalen", `<p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
-      <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
-      <div class="btn-rij" style="margin-top:14px"><button class="btn primair" id="fi-nu">Nu controleren</button><button type="button" class="btn" data-act="sluit">Sluiten</button></div>
-      <form id="fi-gh" style="margin-top:24px;padding-top:18px;border-top:1px solid var(--line)">
-        <div class="veld"><label for="fi-token">GitHub-sleutel om de lijst door te sturen</label>
-          <input id="fi-token" name="token" type="password" autocomplete="off" placeholder="${gh.token() ? "Ingesteld (laat leeg om te houden)" : "github_pat_…"}"></div>
-        <p class="sub">Een sleutel die alleen <b>keuken-app</b> mag wijzigen. Hij blijft op deze tablet.</p>
-        <div class="btn-rij"><button class="btn">Sleutel opslaan</button>${gh.token() ? '<button type="button" class="btn" id="fi-wis">Sleutel wissen</button>' : ""}</div>
-      </form>`, (root) => {
-      root.querySelector("#fi-gh").addEventListener("submit", (e) => {
-        e.preventDefault(); const v = e.target.token.value.trim();
-        if (v) { try { localStorage.setItem(GH_SLEUTEL, v); } catch {} }
-        sluitSheet(); toast(v ? "GitHub-sleutel opgeslagen." : "Niets gewijzigd.");
-      });
-      root.querySelector("#fi-wis")?.addEventListener("click", () => { try { localStorage.removeItem(GH_SLEUTEL); } catch {} sluitSheet(); toast("GitHub-sleutel gewist."); });
-      root.querySelector("#fi-nu").addEventListener("click", async () => {
-        const nieuw = await sync.haal();
-        sluitSheet();
-        if (!nieuw) toast(sync.status === "aan" ? "Er is nog geen nieuw weekmenu." : `Controleren lukte niet: ${sync.fout}.`);
-      });
-    });
+    return `<div class="twee-kol" style="margin-top:14px">
+      <section class="paneel"><h3>Weekmenu van Claude</h3>
+        <p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
+        <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
+        <button class="btn primair" data-act="nu-controleren">Nu controleren</button></section>
+      <section class="paneel"><h3>Doorsturen naar je AH-mandje</h3>
+        <form data-form="token">
+          <div class="veld"><label for="fi-token">GitHub-sleutel</label>
+            <input id="fi-token" name="token" type="password" autocomplete="off" placeholder="${gh.token() ? "Ingesteld (laat leeg om te houden)" : "github_pat_…"}"></div>
+          <p class="sub">Een sleutel die alleen <b>keuken-app</b> mag wijzigen. Hij blijft op deze tablet.</p>
+          <div class="btn-rij"><button class="btn">Sleutel opslaan</button>${gh.token() ? '<button type="button" class="btn" data-act="wis-token">Sleutel wissen</button>' : ""}</div>
+        </form></section>
+      <section class="paneel"><h3>Scherm</h3>
+        <p class="sub" style="margin-top:0">Na 3 minuten niets doen verschijnt de klok. 's Nachts wordt hij gedimd.</p>
+        <button class="btn" data-act="volscherm">Volledig scherm aan of uit</button></section>
+    </div>`;
   }
 
   // ---------- Screensaver ----------
@@ -682,13 +700,7 @@
     if (!$("#screensaver").hidden) { e.preventDefault(); e.stopPropagation(); stopScreensaver(); }
     resetIdle(); vraagWakeLock();
   }, { capture: true, passive: false }));
-  $("#btn-instellingen").addEventListener("click", () => instellingenSheet());
   $("#btn-klok").addEventListener("click", () => setTimeout(startScreensaver, 0));
-  $("#btn-volscherm").addEventListener("click", () => {
-    const el = document.documentElement;
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    else el.requestFullscreen?.().catch(() => toast("Volledig scherm is hier niet beschikbaar."));
-  });
 
   // Scherm aan houden zolang de app open staat
   let wakeLock = null;
