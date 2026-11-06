@@ -226,7 +226,8 @@ h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-
   .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
   .rail { order: 2; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); gap: 2px; }
   .rail-brand, .rail-spacer, #btn-volscherm { display: none; }
-  .rail-btn { min-width: 74px; min-height: 62px; font-size: 12px; padding: 6px 2px; }
+  .rail-btn { flex: 1 1 0; min-width: 0; min-height: 62px; font-size: 11px; padding: 6px 0; }
+  .rail-btn span:last-of-type { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .rail-btn .ico svg { width: 24px; height: 24px; }
   .main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 40px; }
   .veld-rij { grid-template-columns: 1fr; }
@@ -304,3 +305,20 @@ a.btn { text-decoration: none; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Onderdelen binnen Instellingen */
+.kop.sectie { margin: 18px 0 14px; }
+.sectie-titel { font-size: 26px; }
+.klaar-band.gevuld { border-left: 6px solid var(--yolk); animation: kaart-in .5s ease both; }
+.btn.groot { padding: 16px 26px; font-size: 1.15rem; }
+.klaar-band .btn:not(.accent) { color: var(--ink); }
+.idee-balk { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.idee-balk input { flex: 1 1 260px; min-width: 0; }
+.idee-uit:not(:empty) { margin-top: 12px; }
+.idee-uit .rij { animation: kaart-in .4s ease both; }
+.idee-uit .rij:nth-child(2) { animation-delay: 80ms; } .idee-uit .rij:nth-child(3) { animation-delay: 160ms; }
+.idee-laden { display: flex; gap: 8px; padding: 14px 4px; }
+.idee-laden span { width: 10px; height: 10px; border-radius: 50%; background: var(--yolk); animation: idee-puls 1s ease-in-out infinite; }
+.idee-laden span:nth-child(2) { animation-delay: .15s; } .idee-laden span:nth-child(3) { animation-delay: .3s; }
+@keyframes idee-puls { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .idee-laden span, .idee-uit .rij { animation: none; } }

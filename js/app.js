@@ -99,7 +99,7 @@
     async haal() {
       try {
         const res = await fetch("data/volgende.json", { cache: "no-store" });
-        if (res.status === 404) { this.status = "aan"; this.laatst = new Date(); return false; }
+        if (res.status === 404) { this.status = "aan"; this.laatst = new Date(); await this.mandje(); return false; }
         if (!res.ok) throw new Error(`server gaf ${res.status}`);
         const data = await res.json();
         this.status = "aan"; this.fout = ""; this.laatst = new Date();
@@ -122,10 +122,85 @@
           render();
           if (nieuw) toast("Het weekmenu voor volgende week staat klaar. Bekijk het onder Weekmenu.");
         }
+        await this.mandje();
         return veranderd;
       } catch (e) { this.status = "fout"; this.fout = e.message; return false; }
     },
+    // Na het doorsturen: kijk of Claude het AH-mandje al gevuld heeft (data/mandje.json).
+    async mandje() {
+      const l = state.lijst;
+      if (!l?.verstuurdOp || l.mandje) return false;
+      try {
+        const res = await fetch("data/mandje.json", { cache: "no-store" });
+        if (!res.ok) return false;
+        const m = await res.json();
+        if (m?.klaarOp !== l.klaarOp || m.status !== "gevuld") return false;
+        l.mandje = m; bewaar(); render();
+        toast("Je AH-mandje is gevuld. Rond de bestelling af bij Boodschappen.");
+        return true;
+      } catch { return false; }
+    },
     duw() { /* tablet schrijft niet terug naar de repo */ }
+  };
+
+  // ---------- Claude: gerechtideeën ----------
+  // De tablet vraagt Claude rechtstreeks om voorstellen. De API-sleutel blijft op deze tablet.
+  // Geen SDK: de app heeft geen bouwstap, dus een gewone fetch naar de Messages API.
+  const CLAUDE_SLEUTEL = "keukenbord.claudesleutel";
+  const GERECHT_SCHEMA = {
+    type: "object", additionalProperties: false, required: ["gerechten"],
+    properties: { gerechten: { type: "array", items: {
+      type: "object", additionalProperties: false,
+      required: ["gerecht", "waarom", "tijd", "kosten", "bonus", "kindertip", "ingredienten", "stappen"],
+      properties: {
+        gerecht: { type: "string" }, waarom: { type: "string" }, tijd: { type: "integer" }, kosten: { type: "number" },
+        bonus: { type: "array", items: { type: "string" } }, kindertip: { type: "string" },
+        ingredienten: { type: "array", items: { type: "object", additionalProperties: false, required: ["naam", "hoeveelheid", "eenheid"],
+          properties: { naam: { type: "string" }, hoeveelheid: { type: "number" }, eenheid: { type: "string", enum: ["g", "kg", "ml", "l", "stuks", "blik", "pak", "zak", "pot", "fles", "bos"] } } } },
+        stappen: { type: "array", items: { type: "string" } }
+      } } } }
+  };
+  const claude = {
+    sleutel() { try { return localStorage.getItem(CLAUDE_SLEUTEL) || ""; } catch { return ""; } },
+    async ideeen(idee, dag, menu) {
+      const anderen = menu.dagen.filter((x) => x !== dag && !x.geschrapt).map((x) => `${dagNaam(x.datum)}: ${x.gerecht}`).join("; ");
+      const bonus = [...new Set(menu.dagen.flatMap((x) => x.bonus || []))].join(", ");
+      const voorraad = state.voorraad.items.filter((v) => v.hoeveelheid > 0).map((v) => `${v.naam} (${v.hoeveelheid} ${v.eenheid})`).join(", ");
+      const vraag = `Stel 3 avondgerechten voor ${dagNaam(dag.datum)} voor op basis van dit idee van het gezin: "${idee}".
+
+Gezin: 5 personen, kinderen van 9, 3 en 1 jaar, dus ongeveer 4 volwassen porties. Mild gekruid, voordelig, boodschappen bij Albert Heijn.${dag.datum && new Date(dag.datum).getDay() % 6 ? " Het is doordeweeks: maximaal 30 tot 40 minuten." : ""}
+Vervangt: ${dag.gerecht || "nog niets"}.
+Andere avonden deze week (niet herhalen): ${anderen || "geen"}.
+Bonusproducten in dit menu, gebruik ze waar het past: ${bonus || "onbekend"}.
+In huis: ${voorraad || "onbekend"}.
+
+Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij het idee, bereidingstijd in minuten, geschatte kosten in euro voor het hele gezin, welke bonusproducten erin zitten, een tip voor de kleintjes, ingrediënten met hoeveelheid en eenheid (gebruik dezelfde namen als in de voorraad waar dat kan), en korte bereidingsstappen. Maak de 3 voorstellen echt verschillend.`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": this.sleutel(),
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: "claude-opus-5-5",
+          max_tokens: 8000,
+          output_config: { effort: "low", format: { type: "json_schema", schema: GERECHT_SCHEMA } },
+          messages: [{ role: "user", content: vraag }]
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("de Claude-sleutel klopt niet");
+        if (res.status === 429) throw new Error("Claude is even te druk, probeer het zo opnieuw");
+        throw new Error(data?.error?.message || `server gaf ${res.status}`);
+      }
+      if (data.stop_reason === "refusal") throw new Error("Claude wilde dit niet uitwerken");
+      if (data.stop_reason === "max_tokens") throw new Error("het antwoord werd te lang");
+      const tekst = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
+      return JSON.parse(tekst).gerechten || [];
+    }
   };
 
   // ---------- Toast en sheet ----------
@@ -350,11 +425,27 @@
           <form class="btn-rij" style="margin-top:12px" data-form="eigen"><input class="zoek" style="flex:1;min-width:0" id="eigen-naam" placeholder="Bijv. pindakaas" autocomplete="off" aria-label="Artikel toevoegen"><button class="btn primair">Toevoegen</button></form></section>
       </div>
       ${huis ? `<details class="in-huis" style="margin-top:22px"><summary class="btn klein" style="list-style:none;display:inline-flex">Al in huis (${l.menu.huis.length + l.school.huis.length})</summary><div class="paneel" style="margin-top:10px">${huis}</div></details>` : ""}
-      <div class="klaar-band"><div><b>${klaar ? "Lijst staat klaar voor je AH-mandje" : "Klaar met controleren?"}</b>
-        <p class="sub">${klaar ? (state.lijst.verstuurdOp ? "Doorgestuurd. Claude zet hem in je AH-mandje; afrekenen doe je daarna in de AH-app." : "Nog niet doorgestuurd. Stel bij Bijwerken een GitHub-sleutel in, of tik op Lijst kopiëren.") : "Zet de lijst klaar, dan gaat hij naar Claude voor je AH-mandje."}</p></div>
+      ${klaar && state.lijst.mandje ? mandjeBand(state.lijst.mandje) : `<div class="klaar-band"><div><b>${klaar ? "Lijst staat klaar voor je AH-mandje" : "Klaar met controleren?"}</b>
+        <p class="sub">${klaar ? (state.lijst.verstuurdOp ? "Doorgestuurd. Claude zet hem in je AH-mandje; afrekenen doe je daarna in de AH-app." : "Nog niet doorgestuurd. Stel bij Instellingen een GitHub-sleutel in, of tik op Lijst kopiëren.") : "Zet de lijst klaar, dan gaat hij naar Claude voor je AH-mandje."}</p></div>
         <div class="btn-rij">${klaar ? '<button class="btn klein" data-act="lijst-open">Weer aanpassen</button>' : '<button class="btn accent" data-act="lijst-klaar">Lijst klaarzetten</button>'}
-        <a class="btn klein" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Open AH</a></div></div>`;
+        <a class="btn klein" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Open AH</a></div></div>`}`;
   };
+
+  function mandjeBand(m) {
+    const euro = (x) => typeof x === "number" ? "€ " + x.toFixed(2).replace(".", ",") : "";
+    const extra = [
+      m.artikelen ? `${m.artikelen} artikelen` : "",
+      m.totaal != null ? `ca. ${euro(m.totaal)}` : "",
+      m.besparing ? `${euro(m.besparing)} Bonus` : ""
+    ].filter(Boolean).join(" · ");
+    const lijstje = (titel, xs) => xs?.length ? `<p class="sub"><b>${titel}:</b> ${xs.map(esc).join(", ")}</p>` : "";
+    return `<div class="klaar-band gevuld"><div><b>Je AH-mandje is gevuld</b>
+        <p class="sub">${esc(extra)}${extra ? ". " : ""}Kies een bezorgmoment en reken af bij AH.</p>
+        ${lijstje("Vervangen", (m.vervangingen || []).map((v) => typeof v === "string" ? v : `${v.van} → ${v.naar}`))}
+        ${lijstje("Niet gevonden", (m.nietGevonden || []).map((v) => typeof v === "string" ? v : v.naam))}</div>
+        <div class="btn-rij"><a class="btn accent groot" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Bestelling afronden bij AH</a>
+        <button class="btn klein" data-act="lijst-open">Nieuwe lijst</button></div></div>`;
+  }
 
   views.voorraad = function () {
     const q = norm(ui.zoek);
@@ -451,7 +542,14 @@
     heropen() { const m = ui.week === "volgende" && state.volgende ? state.volgende : state.menu; m.status = "voorstel"; bewaar(); render(); },
     "naar-volgende"() { ui.week = "volgende"; ga("week"); },
     weektab(el) { ui.week = el.dataset.week; render(); },
-    instellingen() { instellingenSheet(); },
+    "inst-tab"(el) { ui.instTab = el.dataset.tab; render(); },
+    async "nu-controleren"() { const nieuw = await sync.haal(); render(); if (!nieuw) toast(sync.status === "aan" ? "Er is nog geen nieuw weekmenu." : `Controleren lukte niet: ${sync.fout}.`); },
+    "wis-claude"() { try { localStorage.removeItem(CLAUDE_SLEUTEL); } catch {} render(); toast("Claude-sleutel gewist."); },
+    "wis-token"() { try { localStorage.removeItem(GH_SLEUTEL); } catch {} render(); toast("GitHub-sleutel gewist."); },
+    volscherm() {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+      else document.documentElement.requestFullscreen?.().catch(() => toast("Volledig scherm is hier niet beschikbaar."));
+    },
     schrap(el) { const d = dagVan(el.dataset.datum); d.geschrapt = true; bewaar(); render(); toast(`${cap(dagNaam(d.datum))} geschrapt.`, () => { d.geschrapt = false; bewaar(); render(); }); },
     herstel(el) { dagVan(el.dataset.datum).geschrapt = false; bewaar(); render(); },
     wissel(el) {
@@ -459,18 +557,45 @@
       const mm = menuVan(d.datum);
       const inMenu = new Set(mm.dagen.map((x) => norm(x.gerecht)));
       const opties = state.recepten.filter((r) => !inMenu.has(norm(r.gerecht)));
-      sheet(`Ander gerecht voor ${dagNaam(d.datum)}`, opties.length ? `<div class="rij-lijst">${opties.map((r, i) => `<button class="rij" style="text-align:left" data-kies="${i}"><div><div class="rij-naam">${esc(r.gerecht)}</div><div class="rij-sub">${esc(r.tijd)} min · ${euro(r.kosten)}</div></div><span class="chip">Kies</span></button>`).join("")}</div>
-        <p class="sub">Vanaf de volgende stap stelt Claude hier passende gerechten voor op basis van de Bonus.</p><div class="btn-rij" style="margin-top:14px"><button class="btn" data-act="sluit">Annuleren</button></div>`
-        : `<p>Er zijn geen andere recepten opgeslagen.</p><button class="btn" data-act="sluit">Sluiten</button>`, (root) => {
-        root.querySelectorAll("[data-kies]").forEach((b) => b.addEventListener("click", () => {
-          const r = opties[+b.dataset.kies];
+      const rij = (r, i, soort) => `<button class="rij" style="text-align:left" data-${soort}="${i}"><div><div class="rij-naam">${esc(r.gerecht)}</div><div class="rij-sub">${esc(r.tijd)} min · ${euro(r.kosten)}${r.waarom ? ` · ${esc(r.waarom)}` : ""}</div></div><span class="chip">Kies</span></button>`;
+      const heeftSleutel = !!claude.sleutel();
+      sheet(`Ander gerecht voor ${dagNaam(d.datum)}`, `
+        <form class="idee-balk" data-idee>
+          <input class="zoek" name="idee" autocomplete="off" placeholder="Waar heb je zin in? Bijv. iets met zalm, of snel en Mexicaans" aria-label="Jouw idee">
+          <button class="btn accent">Vraag Claude</button>
+        </form>
+        ${heeftSleutel ? "" : '<p class="sub">Stel eerst bij Instellingen, App een Claude-sleutel in om ideeën te laten uitwerken.</p>'}
+        <div class="idee-uit" aria-live="polite"></div>
+        ${opties.length ? `<h3 class="sectie-titel" style="margin-top:18px">Of kies een bewaard recept</h3><div class="rij-lijst">${opties.map((r, i) => rij(r, i, "kies")).join("")}</div>` : ""}
+        <div class="btn-rij" style="margin-top:14px"><button class="btn" data-act="sluit">Annuleren</button></div>`, (root) => {
+        const vervang = (r, bewaard) => {
           const oud = { ...d };
           const i = mm.dagen.indexOf(d);
-          state.recepten = state.recepten.filter((x) => x !== r);
-          state.recepten.push({ gerecht: oud.gerecht, tijd: oud.tijd, kosten: oud.kosten, bonus: oud.bonus, kindertip: oud.kindertip, ingredienten: oud.ingredienten, stappen: oud.stappen });
-          mm.dagen[i] = { ...JSON.parse(JSON.stringify(r)), datum: d.datum, geschrapt: false, gekookt: false };
+          if (bewaard) state.recepten = state.recepten.filter((x) => x !== r);
+          if (!state.recepten.some((x) => norm(x.gerecht) === norm(oud.gerecht)))
+            state.recepten.push({ gerecht: oud.gerecht, tijd: oud.tijd, kosten: oud.kosten, bonus: oud.bonus, kindertip: oud.kindertip, ingredienten: oud.ingredienten, stappen: oud.stappen });
+          const { waarom, ...rest } = r;
+          mm.dagen[i] = { ...JSON.parse(JSON.stringify(rest)), datum: d.datum, geschrapt: false, gekookt: false };
           bewaar(); sluitSheet(); render(); toast(`${cap(dagNaam(d.datum))}: ${r.gerecht}.`);
-        }));
+        };
+        root.querySelectorAll("[data-kies]").forEach((b) => b.addEventListener("click", () => vervang(opties[+b.dataset.kies], true)));
+        const uit = root.querySelector(".idee-uit");
+        root.querySelector("[data-idee]").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const f = e.currentTarget, idee = f.idee.value.trim();
+          if (!idee) { f.idee.focus(); return; }
+          if (!claude.sleutel()) { uit.innerHTML = '<p class="sub">Er is nog geen Claude-sleutel. Zet die bij Instellingen, App.</p>'; return; }
+          const knop = f.querySelector("button"); knop.disabled = true; knop.textContent = "Claude denkt na…";
+          uit.innerHTML = '<div class="idee-laden"><span></span><span></span><span></span></div>';
+          try {
+            const voorstellen = await claude.ideeen(idee, d, mm);
+            if (!root.isConnected) return;
+            uit.innerHTML = voorstellen.length ? `<div class="rij-lijst">${voorstellen.map((r, i) => rij(r, i, "nieuw")).join("")}</div>` : '<p class="sub">Claude had geen voorstel. Probeer het anders te omschrijven.</p>';
+            uit.querySelectorAll("[data-nieuw]").forEach((b) => b.addEventListener("click", () => vervang(voorstellen[+b.dataset.nieuw], false)));
+          } catch (err) {
+            uit.innerHTML = `<p class="sub">Dat lukte niet: ${esc(err.message)}.</p>`;
+          } finally { knop.disabled = false; knop.textContent = "Vraag Claude"; }
+        });
       });
     },
     async voorbeeld() { const v = await laadVoorbeeld(); state = compleet({ ...state, menu: v.menu, recepten: v.recepten }); bewaar(); render(); },
@@ -486,7 +611,7 @@
       state.lijst.status = "klaar"; state.lijst.klaarOp = new Date().toISOString();
       state.lijst.bestelling = [...l.menu.koop.map((x) => ({ ...strip(x), groep: "menu" })), ...l.school.koop.map((x) => ({ ...strip(x), groep: "school" })), ...l.vaste.map((x) => ({ ...strip(x), groep: "huishouden" })), ...l.eigen.map((x) => ({ naam: x.naam, hoeveelheid: x.aantal, eenheid: "stuks", groep: "eigen" }))];
       bewaar(); render();
-      if (!gh.token()) { toast("Lijst staat klaar. Stel bij Bijwerken een GitHub-sleutel in om hem automatisch door te sturen."); return; }
+      if (!gh.token()) { toast("Lijst staat klaar. Stel bij Instellingen een GitHub-sleutel in om hem automatisch door te sturen."); return; }
       toast("Lijst wordt doorgestuurd…");
       try {
         await stuurDoor();
@@ -494,7 +619,7 @@
         toast("Doorgestuurd. Claude zet de boodschappen in je AH-mandje.");
       } catch (e) { toast(`Doorsturen lukte niet: ${e.message}. Probeer het later opnieuw.`); }
     },
-    "lijst-open"() { state.lijst.status = "open"; state.lijst.verstuurdOp = null; bewaar(); render(); },
+    "lijst-open"() { state.lijst.status = "open"; state.lijst.verstuurdOp = null; state.lijst.mandje = null; bewaar(); render(); },
     "eigen-plus"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal++; bewaar(); render(); },
     "eigen-min"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal--; if (x.aantal <= 0) state.lijst.items = state.lijst.items.filter((i) => i !== x); bewaar(); render(); },
     "v-plus"(el) { const v = state.voorraad.items.find((i) => i.id === el.dataset.id); v.hoeveelheid = +(v.hoeveelheid + stapVoor(v.eenheid)).toFixed(3); bewaar(); render(); },
@@ -525,6 +650,16 @@
       const bestaand = state.lijst.items.find((i) => norm(i.naam) === norm(naam));
       if (bestaand) bestaand.aantal++; else state.lijst.items.push({ id: uid(), naam: cap(naam), aantal: 1 });
       bewaar(); render(); $("#eigen-naam")?.focus();
+    }
+    if (f.dataset.form === "claude") {
+      const v = f.sleutel.value.trim();
+      if (v) { try { localStorage.setItem(CLAUDE_SLEUTEL, v); } catch {} }
+      render(); toast(v ? "Claude-sleutel opgeslagen." : "Niets gewijzigd.");
+    }
+    if (f.dataset.form === "token") {
+      const v = f.token.value.trim();
+      if (v) { try { localStorage.setItem(GH_SLEUTEL, v); } catch {} }
+      render(); toast(v ? "GitHub-sleutel opgeslagen." : "Niets gewijzigd.");
     }
     if (f.dataset.form === "school-item") {
       const naam = f.naam.value.trim(); if (!naam) return;
@@ -622,30 +757,44 @@
     }, "Voorraad bijgewerkt vanaf de tablet");
   }
 
-  function instellingenSheet() {
+  // ---------- Instellingen ----------
+  const INST_TABS = [["huishouden", "Huishouden"], ["school", "School"], ["app", "App en verbinding"]];
+  function alsSectie(html) {
+    // Maak van de paginakop van een onderdeel een sectiekop binnen Instellingen.
+    return html.replace(/<div class="eyebrow">[^<]*<\/div>/, "").replace("<h1>", '<h2 class="sectie-titel">').replace("</h1>", "</h2>").replace('<div class="kop">', '<div class="kop sectie">');
+  }
+  views.instellingen = function () {
+    ui.instTab ||= "huishouden";
+    const tabs = `<div class="btn-rij" role="tablist" style="margin-bottom:8px">${INST_TABS.map(([k, t]) => `<button class="btn klein ${ui.instTab === k ? "primair" : ""}" data-act="inst-tab" data-tab="${k}" role="tab" aria-selected="${ui.instTab === k}">${t}</button>`).join("")}</div>`;
+    const inhoud = ui.instTab === "school" ? alsSectie(views.school()) : ui.instTab === "app" ? appInstellingen() : alsSectie(views.huishouden());
+    return `<div class="kop"><div><div class="eyebrow">Huishouden, school en app</div><h1>Instellingen</h1></div></div>${tabs}<div class="inst-inhoud" data-tab="${ui.instTab}">${inhoud}</div>`;
+  };
+  function appInstellingen() {
     const status = sync.status === "aan" ? `Laatst gecontroleerd om ${sync.laatst.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.` : sync.status === "fout" ? `Controleren lukte niet: ${esc(sync.fout)}.` : "Nog niet gecontroleerd.";
     const v = state.volgende;
-    sheet("Weekmenu ophalen", `<p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
-      <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
-      <div class="btn-rij" style="margin-top:14px"><button class="btn primair" id="fi-nu">Nu controleren</button><button type="button" class="btn" data-act="sluit">Sluiten</button></div>
-      <form id="fi-gh" style="margin-top:24px;padding-top:18px;border-top:1px solid var(--line)">
-        <div class="veld"><label for="fi-token">GitHub-sleutel om de lijst door te sturen</label>
-          <input id="fi-token" name="token" type="password" autocomplete="off" placeholder="${gh.token() ? "Ingesteld (laat leeg om te houden)" : "github_pat_…"}"></div>
-        <p class="sub">Een sleutel die alleen <b>keuken-app</b> mag wijzigen. Hij blijft op deze tablet.</p>
-        <div class="btn-rij"><button class="btn">Sleutel opslaan</button>${gh.token() ? '<button type="button" class="btn" id="fi-wis">Sleutel wissen</button>' : ""}</div>
-      </form>`, (root) => {
-      root.querySelector("#fi-gh").addEventListener("submit", (e) => {
-        e.preventDefault(); const v = e.target.token.value.trim();
-        if (v) { try { localStorage.setItem(GH_SLEUTEL, v); } catch {} }
-        sluitSheet(); toast(v ? "GitHub-sleutel opgeslagen." : "Niets gewijzigd.");
-      });
-      root.querySelector("#fi-wis")?.addEventListener("click", () => { try { localStorage.removeItem(GH_SLEUTEL); } catch {} sluitSheet(); toast("GitHub-sleutel gewist."); });
-      root.querySelector("#fi-nu").addEventListener("click", async () => {
-        const nieuw = await sync.haal();
-        sluitSheet();
-        if (!nieuw) toast(sync.status === "aan" ? "Er is nog geen nieuw weekmenu." : `Controleren lukte niet: ${sync.fout}.`);
-      });
-    });
+    return `<div class="twee-kol" style="margin-top:14px">
+      <section class="paneel"><h3>Weekmenu van Claude</h3>
+        <p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
+        <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
+        <button class="btn primair" data-act="nu-controleren">Nu controleren</button></section>
+      <section class="paneel"><h3>Doorsturen naar je AH-mandje</h3>
+        <form data-form="token">
+          <div class="veld"><label for="fi-token">GitHub-sleutel</label>
+            <input id="fi-token" name="token" type="password" autocomplete="off" placeholder="${gh.token() ? "Ingesteld (laat leeg om te houden)" : "github_pat_…"}"></div>
+          <p class="sub">Een sleutel die alleen <b>keuken-app</b> mag wijzigen. Hij blijft op deze tablet.</p>
+          <div class="btn-rij"><button class="btn">Sleutel opslaan</button>${gh.token() ? '<button type="button" class="btn" data-act="wis-token">Sleutel wissen</button>' : ""}</div>
+        </form></section>
+      <section class="paneel"><h3>Ideeën van Claude</h3>
+        <form data-form="claude">
+          <div class="veld"><label for="fi-claude">Claude API-sleutel</label>
+            <input id="fi-claude" name="sleutel" type="password" autocomplete="off" placeholder="${claude.sleutel() ? "Ingesteld (laat leeg om te houden)" : "sk-ant-…"}"></div>
+          <p class="sub">Hiermee werkt Claude je eigen ideeën uit bij Ander gerecht. Maak hem aan op console.anthropic.com. Hij blijft op deze tablet; een vraag kost een paar cent.</p>
+          <div class="btn-rij"><button class="btn">Sleutel opslaan</button>${claude.sleutel() ? '<button type="button" class="btn" data-act="wis-claude">Sleutel wissen</button>' : ""}</div>
+        </form></section>
+      <section class="paneel"><h3>Scherm</h3>
+        <p class="sub" style="margin-top:0">Na 3 minuten niets doen verschijnt de klok. 's Nachts wordt hij gedimd.</p>
+        <button class="btn" data-act="volscherm">Volledig scherm aan of uit</button></section>
+    </div>`;
   }
 
   // ---------- Screensaver ----------
@@ -682,13 +831,7 @@
     if (!$("#screensaver").hidden) { e.preventDefault(); e.stopPropagation(); stopScreensaver(); }
     resetIdle(); vraagWakeLock();
   }, { capture: true, passive: false }));
-  $("#btn-instellingen").addEventListener("click", () => instellingenSheet());
   $("#btn-klok").addEventListener("click", () => setTimeout(startScreensaver, 0));
-  $("#btn-volscherm").addEventListener("click", () => {
-    const el = document.documentElement;
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    else el.requestFullscreen?.().catch(() => toast("Volledig scherm is hier niet beschikbaar."));
-  });
 
   // Scherm aan houden zolang de app open staat
   let wakeLock = null;
@@ -715,6 +858,7 @@
     resetIdle();
     await sync.haal();
     setInterval(() => { if (document.visibilityState === "visible") sync.haal(); }, 30 * 60 * 1000);
+    setInterval(() => { if (state.lijst?.verstuurdOp && !state.lijst.mandje) sync.mandje(); }, 2 * 60 * 1000);
   }
   start();
 
