@@ -9,7 +9,7 @@ Als je op de tablet **Lijst klaarzetten** tikt, zet de tablet de bestelling in `
 3. Repository access: **Only select repositories**, kies `keuken-app`.
 4. Permissions → Repository permissions → **Contents: Read and write**. Verder niets.
 5. Klik **Generate token** en kopieer de sleutel (begint met `github_pat_`).
-6. Op de tablet: **Bijwerken** → plak de sleutel → **Sleutel opslaan**.
+6. Op de tablet: **Instellingen** → **App** → plak de sleutel → **Sleutel opslaan**.
 
 De sleutel blijft op de tablet en kan alleen deze repo wijzigen. Intrekken kan altijd op dezelfde GitHub-pagina.
 
