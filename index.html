@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Keukenbord</title>
+  <meta name="theme-color" content="#1f3a34">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app">
+    <nav class="rail" aria-label="Schermen">
+      <div class="rail-brand" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="34" height="34"><circle cx="16" cy="16" r="14" fill="var(--yolk)"/><path d="M9 17c0-4 3-7 7-7s7 3 7 7" stroke="var(--ink-on-dark)" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M7 18h18" stroke="var(--ink-on-dark)" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </div>
+      <button class="rail-btn" data-view="vandaag" aria-current="page"><span class="ico" data-icon="bord"></span><span>Vandaag</span></button>
+      <button class="rail-btn" data-view="week"><span class="ico" data-icon="kalender"></span><span>Weekmenu</span></button>
+      <button class="rail-btn" data-view="boodschappen"><span class="ico" data-icon="kar"></span><span>Boodschappen</span><b class="badge" id="badge-lijst" hidden></b></button>
+      <button class="rail-btn" data-view="voorraad"><span class="ico" data-icon="blik"></span><span>Voorraad</span></button>
+      <button class="rail-btn" data-view="huishouden"><span class="ico" data-icon="spons"></span><span>Huishouden</span><b class="badge" id="badge-vaste" hidden></b></button>
+      <button class="rail-btn" data-view="school"><span class="ico" data-icon="tas"></span><span>School</span></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn small" id="btn-klok"><span class="ico" data-icon="klok"></span><span>Klok</span></button>
+      <button class="rail-btn small" id="btn-volscherm"><span class="ico" data-icon="volscherm"></span><span>Volledig</span></button>
+    </nav>
+
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-tekst"></span>
+    <button id="toast-actie" class="toast-btn" hidden>Ongedaan maken</button>
+  </div>
+
+  <div class="sheet-backdrop" id="sheet" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-titel">
+      <h2 id="sheet-titel"></h2>
+      <div id="sheet-body"></div>
+    </div>
+  </div>
+
+  <div class="screensaver" id="screensaver" hidden>
+    <div class="ss-inner" id="ss-inner">
+      <div class="ss-tijd" id="ss-tijd">00:00</div>
+      <div class="ss-datum" id="ss-datum"></div>
+      <div class="ss-vanavond" id="ss-vanavond"></div>
+      <div class="ss-hint">Tik om verder te gaan</div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

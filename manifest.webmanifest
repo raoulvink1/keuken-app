@@ -1,0 +1,15 @@
+{
+  "name": "Keukenbord",
+  "short_name": "Keuken",
+  "description": "Weekmenu, voorraad en boodschappen voor aan de keukenmuur.",
+  "lang": "nl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1f3a34",
+  "theme_color": "#1f3a34",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
