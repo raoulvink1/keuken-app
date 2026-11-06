@@ -13,6 +13,7 @@
     spons: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v3H9zM10 6v2.5M14 6v2.5"/><path d="M7.5 8.5h9l1 3v8.5a1.5 1.5 0 0 1-1.5 1.5H8a1.5 1.5 0 0 1-1.5-1.5v-8.5z"/><path d="M6.5 14h11"/></svg>',
     tas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6"/><rect x="4.5" y="6" width="15" height="15" rx="3"/><path d="M8 13h8v4H8z"/></svg>',
     klok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>',
+    tandwiel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/><circle cx="12" cy="12" r="6.5"/></svg>',
     volscherm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'
   };
   document.querySelectorAll("[data-icon]").forEach((el) => { el.innerHTML = ICONS[el.dataset.icon] || ""; });
@@ -59,6 +60,7 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       try { localStorage.setItem(SLEUTEL, JSON.stringify(state)); } catch { /* opslag vol of geblokkeerd */ }
+      sync.duw();
     }, 250);
   }
   async function laadVoorbeeld() {
@@ -72,8 +74,59 @@
     s.vaste ||= { items: [] };
     s.school ||= { kinderen: [] };
     s.lijst ||= { items: [], status: "open" };
+    s.volgende ||= null;
+    s._ts ||= {};
     return s;
   }
+
+  // Op maandag wordt het menu van "volgende week" het menu van deze week.
+  function schuifWeek() {
+    const v = state.volgende;
+    if (v && v.dagen?.length && v.dagen[0].datum <= vandaagISO()) {
+      state.menu = v; state.volgende = null;
+      const nu = new Date().toISOString();
+      state._ts.menu = nu; state._ts.volgende = nu;
+      return true;
+    }
+    return false;
+  }
+
+  // ---------- Weekmenu uit de repo ----------
+  // Claude zet elke donderdag het menu voor volgende week in data/volgende.json.
+  // De tablet haalt dat bestand op; goedkeuren, voorraad en lijst blijven op de tablet.
+  const sync = {
+    status: "uit", fout: "", laatst: null,
+    async haal() {
+      try {
+        const res = await fetch("data/volgende.json", { cache: "no-store" });
+        if (res.status === 404) { this.status = "aan"; this.laatst = new Date(); return false; }
+        if (!res.ok) throw new Error(`server gaf ${res.status}`);
+        const data = await res.json();
+        this.status = "aan"; this.fout = ""; this.laatst = new Date();
+        let veranderd = false, nieuw = false;
+        const al = [state.menu?.week, state.volgende?.week];
+        const laatsteDag = data?.dagen?.[data.dagen.length - 1]?.datum;
+        if (data?.week && data.dagen?.length && laatsteDag >= vandaagISO()) {
+          if (!al.includes(data.week)) { state.volgende = data; nieuw = veranderd = true; }
+          else if (state.volgende?.week === data.week && state.volgende.status !== "akkoord" && data.gemaaktOp && data.gemaaktOp !== state.volgende.gemaaktOp) {
+            state.volgende = data; veranderd = true; // bijgewerkt voorstel (zaterdagcontrole)
+          }
+        }
+        for (const r of data?.recepten || []) {
+          if (!state.recepten.some((x) => norm(x.gerecht) === norm(r.gerecht))) { state.recepten.push(r); veranderd = true; }
+        }
+        if (veranderd) {
+          compleet(state);
+          schuifWeek();
+          try { localStorage.setItem(SLEUTEL, JSON.stringify(state)); } catch {}
+          render();
+          if (nieuw) toast("Het weekmenu voor volgende week staat klaar. Bekijk het onder Weekmenu.");
+        }
+        return veranderd;
+      } catch (e) { this.status = "fout"; this.fout = e.message; return false; }
+    },
+    duw() { /* tablet schrijft niet terug naar de repo */ }
+  };
 
   // ---------- Toast en sheet ----------
   let toastTimer = null, toastActie = null;
@@ -100,7 +153,10 @@
   $("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet" || e.target.dataset.act === "sluit") sluitSheet(); });
 
   // ---------- Menu-logica ----------
-  function dagVan(iso) { return state.menu.dagen.find((d) => d.datum === iso) || null; }
+  function dagVan(iso) { return state.menu.dagen.find((d) => d.datum === iso) || state.volgende?.dagen?.find((d) => d.datum === iso) || null; }
+  function menuVan(iso) { return state.volgende?.dagen?.some((d) => d.datum === iso) ? state.volgende : state.menu; }
+  // Voor de boodschappen telt het menu van volgende week zodra dat er is.
+  function bestelMenu() { return state.volgende?.dagen?.length ? state.volgende : state.menu; }
   function vindVoorraad(naam, eenheid) {
     const n = norm(naam);
     const kandidaten = state.voorraad.items.filter((v) => norm(v.naam) === n || norm(v.naam).includes(n) || n.includes(norm(v.naam)));
@@ -131,8 +187,9 @@
     toast(`Eet smakelijk! Voorraad bijgewerkt.${extra}`, () => {
       const b = JSON.parse(backup);
       state.voorraad = b.voorraad;
-      const i = state.menu.dagen.findIndex((d) => d.datum === datum);
-      if (i >= 0) state.menu.dagen[i] = b.dag;
+      const m = menuVan(datum);
+      const i = m.dagen.findIndex((d) => d.datum === datum);
+      if (i >= 0) m.dagen[i] = b.dag;
       bewaar(); render();
       toast("Teruggezet: voorraad is weer zoals hij was.");
     });
@@ -146,7 +203,7 @@
       const x = nodig.get(k) || { naam, hoeveelheid: 0, eenheid: e, bronnen: new Set() };
       x.hoeveelheid += Number(h) || 0; x.bronnen.add(bron); nodig.set(k, x);
     };
-    for (const d of state.menu.dagen) {
+    for (const d of bestelMenu().dagen) {
       if (d.geschrapt || d.gekookt) continue;
       for (const ing of d.ingredienten || []) if (!BASIS.has(norm(ing.naam))) voeg(ing.naam, ing.hoeveelheid, ing.eenheid, dagNaam(d.datum));
     }
@@ -195,7 +252,9 @@
         ${isVandaag ? "" : '<button class="btn klein" data-act="dag" data-delta="0">Vandaag</button>'}
         <button class="btn klein" data-act="dag" data-delta="1" aria-label="Volgende dag">Volgende ›</button>
       </div>`;
-    const kop = `<div class="kop"><div><div class="eyebrow">${esc(cap(dagNaam(iso)))} ${esc(korteDatum(iso))}</div><h1>${esc(titel)}</h1></div>${nav}</div>`;
+    const voorstel = state.volgende?.dagen?.length && state.volgende.status !== "akkoord"
+      ? `<div class="status-band"><div><b>Het menu voor volgende week staat klaar.</b><div class="sub">Bekijk het en geef akkoord${state.volgende.akkoordVoor ? ` vóór ${esc(state.volgende.akkoordVoor)}` : ""}, dan kan de bestelling op tijd de deur uit.</div></div><button class="btn primair" data-act="naar-volgende">Bekijken</button></div>` : "";
+    const kop = `${voorstel}<div class="kop"><div><div class="eyebrow">${esc(cap(dagNaam(iso)))} ${esc(korteDatum(iso))}</div><h1>${esc(titel)}</h1></div>${nav}</div>`;
     if (!dag) {
       return kop + `<div class="paneel leeg"><h2>Nog geen gerecht voor deze dag</h2>
         <p>Zodra het weekmenu klaarstaat zie je hier het recept van de dag.</p>
@@ -234,7 +293,13 @@
   };
 
   views.week = function () {
-    const m = state.menu;
+    if (!ui.week) ui.week = state.volgende?.dagen?.length ? "volgende" : "deze";
+    const heeftVolgende = !!state.volgende?.dagen?.length;
+    if (!heeftVolgende) ui.week = "deze";
+    const m = ui.week === "volgende" ? state.volgende : state.menu;
+    const tabs = heeftVolgende ? `<div class="btn-rij" role="tablist">
+        <button class="btn klein ${ui.week === "deze" ? "primair" : ""}" data-act="weektab" data-week="deze" role="tab" aria-selected="${ui.week === "deze"}">Deze week</button>
+        <button class="btn klein ${ui.week === "volgende" ? "primair" : ""}" data-act="weektab" data-week="volgende" role="tab" aria-selected="${ui.week === "volgende"}">Volgende week${state.volgende.status !== "akkoord" ? " · nieuw" : ""}</button></div>` : "";
     if (!m.dagen.length) {
       return `<div class="kop"><div><div class="eyebrow">Weekmenu</div><h1>Nog geen weekmenu</h1></div></div>
         <div class="paneel leeg"><h2>Het weekmenu van deze week komt hier</h2><p>Elke week verschijnt hier een voorstel op basis van de AH Bonus en wat er nog in huis is.</p>
@@ -244,7 +309,7 @@
     const band = m.status === "akkoord"
       ? `<div class="status-band akkoord"><div><b>Je hebt dit menu goedgekeurd.</b><div class="sub">De ingrediënten staan op de boodschappenlijst.</div></div>
           <div class="btn-rij"><button class="btn primair" data-goto="boodschappen">Naar boodschappen</button><button class="btn klein" data-act="heropen">Weer aanpassen</button></div></div>`
-      : `<div class="status-band"><div><b>Voorstel voor deze week.</b><div class="sub">Wissel of schrap gerechten en geef daarna akkoord.</div></div>
+      : `<div class="status-band"><div><b>Voorstel voor ${ui.week === "volgende" ? "volgende" : "deze"} week.</b><div class="sub">Wissel of schrap gerechten en geef daarna akkoord${m.akkoordVoor ? `, het liefst vóór ${esc(m.akkoordVoor)}` : ""}.</div></div>
           <button class="btn primair" data-act="akkoord">Akkoord geven</button></div>`;
     const vandaag = vandaagISO();
     const kaarten = m.dagen.map((d) => `
@@ -258,8 +323,8 @@
           ${d.gekookt ? "" : d.geschrapt ? `<button class="btn klein" data-act="herstel" data-datum="${d.datum}">Terugzetten</button>` : `<button class="btn klein" data-act="schrap" data-datum="${d.datum}">Schrappen</button>`}
         </div>
       </article>`).join("");
-    return `<div class="kop"><div><div class="eyebrow">Weekmenu ${esc(m.week || "")}${m.voorbeeld ? ' · <span class="chip voorbeeld">Voorbeeld</span>' : ""}</div><h1>Wat eten we deze week?</h1>
-      <p class="sub">Geschat ${euro(totaal)} voor ${m.dagen.filter((d) => !d.geschrapt).length} avonden${m.bonusBesparing ? `, waarvan ${euro(m.bonusBesparing)} Bonusvoordeel` : ""}.</p></div></div>
+    return `<div class="kop"><div><div class="eyebrow">Weekmenu ${esc(m.week || "")}${m.voorbeeld ? ' · <span class="chip voorbeeld">Voorbeeld</span>' : ""}</div><h1>${ui.week === "volgende" ? "Wat eten we volgende week?" : "Wat eten we deze week?"}</h1>
+      <p class="sub">Geschat ${euro(totaal)} voor ${m.dagen.filter((d) => !d.geschrapt).length} avonden${m.bonusBesparing ? `, waarvan ${euro(m.bonusBesparing)} Bonusvoordeel` : ""}.</p></div>${tabs}</div>
       ${band}<div class="week-grid">${kaarten}</div>`;
   };
 
@@ -275,7 +340,7 @@
     const sectie = (titel, inhoud, leegTekst) => `<section class="paneel"><h3>${titel}</h3>${inhoud || `<p class="sub">${leegTekst}</p>`}</section>`;
     const klaar = state.lijst.status === "klaar";
     return `<div class="kop"><div><div class="eyebrow">Boodschappen</div><h1>${totaal} ${totaal === 1 ? "artikel" : "artikelen"} op de lijst</h1>
-      <p class="sub">Wat je al in huis hebt is er al afgehaald.${state.menu.status !== "akkoord" && state.menu.dagen.length ? " Het weekmenu is nog niet goedgekeurd." : ""}</p></div>
+      <p class="sub">Wat je al in huis hebt is er al afgehaald.${bestelMenu().dagen.length ? ` Voor het menu van ${bestelMenu() === state.volgende ? "volgende week" : "deze week"}.` : ""}${bestelMenu().status !== "akkoord" && bestelMenu().dagen.length ? " Dat menu is nog niet goedgekeurd." : ""}</p></div>
       <button class="btn" data-act="kopieer">Lijst kopiëren</button></div>
       <div class="twee-kol">
         ${sectie("Voor het weekmenu", menuKoop, "Alles voor het menu is in huis.")}
@@ -367,13 +432,17 @@
     kook(el) { kook(el.dataset.datum); },
     stap(el) { const d = el.dataset.datum, i = +el.dataset.i; (ui.stappen[d] ||= [])[i] = !ui.stappen[d][i]; render(); },
     "open-dag"(el) { ui.view = "vandaag"; ui.dag = el.dataset.datum; render(); },
-    akkoord() { state.menu.status = "akkoord"; state.menu.akkoordOp = new Date().toISOString(); bewaar(); render(); toast("Weekmenu goedgekeurd. De ingrediënten staan op de boodschappenlijst."); },
-    heropen() { state.menu.status = "voorstel"; bewaar(); render(); },
+    akkoord() { const m = ui.week === "volgende" && state.volgende ? state.volgende : state.menu; m.status = "akkoord"; m.akkoordOp = new Date().toISOString(); bewaar(); render(); toast("Weekmenu goedgekeurd. De ingrediënten staan op de boodschappenlijst."); },
+    heropen() { const m = ui.week === "volgende" && state.volgende ? state.volgende : state.menu; m.status = "voorstel"; bewaar(); render(); },
+    "naar-volgende"() { ui.week = "volgende"; ga("week"); },
+    weektab(el) { ui.week = el.dataset.week; render(); },
+    instellingen() { instellingenSheet(); },
     schrap(el) { const d = dagVan(el.dataset.datum); d.geschrapt = true; bewaar(); render(); toast(`${cap(dagNaam(d.datum))} geschrapt.`, () => { d.geschrapt = false; bewaar(); render(); }); },
     herstel(el) { dagVan(el.dataset.datum).geschrapt = false; bewaar(); render(); },
     wissel(el) {
       const d = dagVan(el.dataset.datum);
-      const inMenu = new Set(state.menu.dagen.map((x) => norm(x.gerecht)));
+      const mm = menuVan(d.datum);
+      const inMenu = new Set(mm.dagen.map((x) => norm(x.gerecht)));
       const opties = state.recepten.filter((r) => !inMenu.has(norm(r.gerecht)));
       sheet(`Ander gerecht voor ${dagNaam(d.datum)}`, opties.length ? `<div class="rij-lijst">${opties.map((r, i) => `<button class="rij" style="text-align:left" data-kies="${i}"><div><div class="rij-naam">${esc(r.gerecht)}</div><div class="rij-sub">${esc(r.tijd)} min · ${euro(r.kosten)}</div></div><span class="chip">Kies</span></button>`).join("")}</div>
         <p class="sub">Vanaf de volgende stap stelt Claude hier passende gerechten voor op basis van de Bonus.</p><div class="btn-rij" style="margin-top:14px"><button class="btn" data-act="sluit">Annuleren</button></div>`
@@ -381,10 +450,10 @@
         root.querySelectorAll("[data-kies]").forEach((b) => b.addEventListener("click", () => {
           const r = opties[+b.dataset.kies];
           const oud = { ...d };
-          const i = state.menu.dagen.indexOf(d);
+          const i = mm.dagen.indexOf(d);
           state.recepten = state.recepten.filter((x) => x !== r);
           state.recepten.push({ gerecht: oud.gerecht, tijd: oud.tijd, kosten: oud.kosten, bonus: oud.bonus, kindertip: oud.kindertip, ingredienten: oud.ingredienten, stappen: oud.stappen });
-          state.menu.dagen[i] = { ...JSON.parse(JSON.stringify(r)), datum: d.datum, geschrapt: false, gekookt: false };
+          mm.dagen[i] = { ...JSON.parse(JSON.stringify(r)), datum: d.datum, geschrapt: false, gekookt: false };
           bewaar(); sluitSheet(); render(); toast(`${cap(dagNaam(d.datum))}: ${r.gerecht}.`);
         }));
       });
@@ -493,6 +562,20 @@
     });
   }
 
+  function instellingenSheet() {
+    const status = sync.status === "aan" ? `Laatst gecontroleerd om ${sync.laatst.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.` : sync.status === "fout" ? `Controleren lukte niet: ${esc(sync.fout)}.` : "Nog niet gecontroleerd.";
+    const v = state.volgende;
+    sheet("Weekmenu ophalen", `<p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
+      <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
+      <div class="btn-rij" style="margin-top:14px"><button class="btn primair" id="fi-nu">Nu controleren</button><button type="button" class="btn" data-act="sluit">Sluiten</button></div>`, (root) => {
+      root.querySelector("#fi-nu").addEventListener("click", async () => {
+        const nieuw = await sync.haal();
+        sluitSheet();
+        if (!nieuw) toast(sync.status === "aan" ? "Er is nog geen nieuw weekmenu." : `Controleren lukte niet: ${sync.fout}.`);
+      });
+    });
+  }
+
   // ---------- Screensaver ----------
   const IDLE_MS = 3 * 60 * 1000;
   let idleTimer = null, klokTimer = null, driftTimer = null;
@@ -527,6 +610,7 @@
     if (!$("#screensaver").hidden) { e.preventDefault(); e.stopPropagation(); stopScreensaver(); }
     resetIdle(); vraagWakeLock();
   }, { capture: true, passive: false }));
+  $("#btn-instellingen").addEventListener("click", () => instellingenSheet());
   $("#btn-klok").addEventListener("click", () => setTimeout(startScreensaver, 0));
   $("#btn-volscherm").addEventListener("click", () => {
     const el = document.documentElement;
@@ -544,7 +628,7 @@
 
   // Om middernacht verspringt "vandaag"
   let laatsteDag = vandaagISO();
-  setInterval(() => { const nu = vandaagISO(); if (nu !== laatsteDag) { laatsteDag = nu; if (state) render(); } }, 60000);
+  setInterval(() => { const nu = vandaagISO(); if (nu !== laatsteDag) { laatsteDag = nu; if (state) { if (schuifWeek()) bewaar(); render(); } } }, 60000);
 
   // ---------- Start ----------
   async function start() {
@@ -554,8 +638,11 @@
       state = compleet(state);
       bewaar();
     } else compleet(state);
+    if (schuifWeek()) { try { localStorage.setItem(SLEUTEL, JSON.stringify(state)); } catch {} }
     render();
     resetIdle();
+    await sync.haal();
+    setInterval(() => { if (document.visibilityState === "visible") sync.haal(); }, 30 * 60 * 1000);
   }
   start();
 
