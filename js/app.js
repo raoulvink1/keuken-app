@@ -187,6 +187,10 @@
         const b = state.bestellingen.find((x) => x.klaarOp === m.klaarOp);
         if (b && b.status === "verstuurd") { b.status = "gevuld"; b.mandje = m; veranderd = true; toast("Je AH-mandje is gevuld. Rond de bestelling af bij AH."); }
         for (const k of m.keuzes || []) leerProduct(k);
+      } else if (m?.status === "mislukt") {
+        // De taak kon het mandje niet vullen (geen browser, niet ingelogd bij AH). Laat dat zien; de volgende ronde probeert hij opnieuw.
+        const b = state.bestellingen.find((x) => x.klaarOp === m.klaarOp && x.status === "verstuurd");
+        if (b && JSON.stringify(b.probleem) !== JSON.stringify({ reden: m.reden, op: m.op })) { b.probleem = { reden: m.reden, op: m.op }; veranderd = true; }
       }
       if (ah?.bestellingen) {
         state.ah = { bijgewerkt: ah.bijgewerkt, bestellingen: ah.bestellingen.slice(0, 8) };
@@ -718,9 +722,17 @@ Geef 5 gangbare, concrete varianten die bij AH te koop zijn, van voordelig (AH-h
     if (!b) return "";
     const lijstje = (titel, xs) => xs?.length ? `<p class="sub"><b>${titel}:</b> ${xs.map(esc).join(", ")}</p>` : "";
     const aantal = (b.ah?.items?.length || b.items.length);
-    if (b.status === "verstuurd") return `<div class="bestel-kaart"><div><b>Claude zet ${aantal} artikelen in je AH-mandje</b>
-      <p class="sub">Doorgestuurd op ${esc(wanneer(b.klaarOp))}. Dat gebeurt binnen een uur, als de Claude-app op je computer aan staat.</p></div>
+    if (b.status === "verstuurd") {
+      const traag = (Date.now() - new Date(b.klaarOp)) > 2 * 36e5;
+      const kop = b.probleem ? "Het AH-mandje is nog niet gevuld" : traag ? "Je AH-mandje is nog niet gevuld" : `Claude zet ${aantal} artikelen in je AH-mandje`;
+      const uitleg = b.probleem
+        ? `Laatste poging ${esc(wanneer(b.probleem.op))}: ${esc(b.probleem.reden || "onbekende fout")}. Zet de Claude-app op je computer aan en log in de ingebouwde browser in bij AH; het volgende uur probeert Claude het opnieuw.`
+        : traag ? `Doorgestuurd op ${esc(wanneer(b.klaarOp))}, maar er is nog niets gebeurd. Staat je computer aan met de Claude-app open?`
+        : `Doorgestuurd op ${esc(wanneer(b.klaarOp))}. Dat gebeurt binnen een uur, als de Claude-app op je computer aan staat.`;
+      return `<div class="bestel-kaart ${b.probleem || traag ? "let-op" : ""}"><div><b>${kop}</b>
+      <p class="sub">${uitleg}</p></div>
       <div class="btn-rij"><button class="btn klein" data-act="bestel-intrekken" data-id="${b.id}">Intrekken</button></div></div>`;
+    }
     if (b.status === "gevuld") {
       const m = b.mandje || {};
       const uiterlijk = bestelUiterlijk(); const laat = uiterlijk && new Date() >= uiterlijk;
