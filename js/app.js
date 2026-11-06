@@ -1,6 +1,10 @@
 /* Keukenbord — keukentablet voor weekmenu, voorraad en boodschappen.
-   Alles draait in de browser. Gegevens staan nu lokaal op de tablet (localStorage);
-   in stap 2 komt er een gedeelde opslag bij zodat Claude het weekmenu kan klaarzetten. */
+   Hoe het samenhangt:
+   - Weekmenu: Claude zet elke week een menu klaar (data/volgende.json). Je past het aan zoals je wilt.
+   - Boodschappen = wat het menu, school, huishouden en je minimale voorraad nodig hebben,
+     min wat in huis is, min wat al besteld en onderweg is. Na het bestellen is de lijst dus leeg.
+   - Een bestelling loopt: verstuurd → in AH-mandje → besteld → binnen. Bij "binnen" gaat alles de voorraad in.
+   - Koken haalt de ingrediënten weer uit de voorraad. */
 (function () {
   "use strict";
 
@@ -26,6 +30,17 @@
   const DAGEN = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
   const BASIS = new Set(["zout", "peper", "olie", "olijfolie", "zonnebloemolie", "water"]);
   const EENHEDEN = ["stuks", "g", "kg", "ml", "l", "blik", "pak", "zak", "pot", "fles", "bos"];
+  // Schappen in de volgorde van een winkel, zodat de lijst logisch leest.
+  const WINKEL_VOLGORDE = ["Groente en fruit", "Vlees en vis", "Kaas, zuivel en eieren", "Brood en ontbijt", "Voorraadkast", "Diepvries", "Drinken", "Overig", "Mee naar school", "Huishouden"];
+  const WINKEL_HERKEN = [
+    ["Diepvries", /diepvries|bevroren|visstick|ijsjes|doperwten diep/],
+    ["Vlees en vis", /gehakt|kip|filet|vlees|worst|spek|bacon|\bham\b|zalm|\bvis\b|kabeljauw|tonijn|garnal|rund|varken|shoarma|schnitzel|burger|balletjes|soepballetjes|lam/],
+    ["Kaas, zuivel en eieren", /kaas|melk|yoghurt|kwark|room|boter|\beie?ren\b|\bei\b|\bvla\b|crème fraîche|creme fraiche|mozzarella|feta|parmezaan|kokosmelk/],
+    ["Groente en fruit", /appel|peer|banaan|mandarijn|sinaasappel|druif|druiven|aardbei|fruit|tomaat|tomaten(?!blok|puree)|komkommer|paprika|\bui\b|uien|knoflook|wortel|peen|\bsla\b|spinazie|broccoli|bloemkool|courgette|prei|aardappel|kriel|champignon|boerenkool|sperzieb|avocado|citroen|limoen|gember|peterselie|basilicum|bieslook|koriander|groente|andijvie|spruit|kool|pompoen|bosui/],
+    ["Brood en ontbijt", /brood|\bbol(len)?\b|krentenbol|beschuit|cracker|wrap|tortilla|pita|naan|ontbijtkoek|hagelslag|\bjam\b|pindakaas|muesli|havermout|cornflakes|rijstwafel|pannenkoekmix/],
+    ["Drinken", /\bsap\b|limonade|drinkpak|\bwater\b|cola|\bthee\b|koffie|siroop/],
+    ["Voorraadkast", /pasta|spaghetti|macaroni|penne|vermicelli|rijst|noedel|meel|bloem|suiker|olie|azijn|saus|bouillon|\bblik\b|tomatenblok|tomatenpuree|passata|kruiden|poeder|kerrie|mosterd|mayonaise|ketchup|pesto|couscous|linzen|kikkererwt|soep/]
+  ];
 
   function isoVan(d) {
     const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
@@ -43,8 +58,11 @@
     if (e === "g" && n >= 1000) { n = n / 1000; e = "kg"; }
     if (e === "ml" && n >= 1000) { n = n / 1000; e = "l"; }
     const txt = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, "").replace(".", ",");
-    return `${txt} ${e}`;
+    return `${txt} ${e === "stuks" && n === 1 ? "stuk" : e}`;
   }
+  // Reken kg/l om naar g/ml zodat hoeveelheden optelbaar zijn.
+  const naarBasis = (h, e) => e === "kg" ? [h * 1000, "g"] : e === "l" ? [h * 1000, "ml"] : [Number(h) || 0, e];
+  const vanBasis = (h, e) => e === "kg" || e === "l" ? h / 1000 : h;
   function stapVoor(e) { return e === "g" ? 50 : e === "ml" ? 100 : e === "l" || e === "kg" ? 0.5 : 1; }
 
   // ---------- Opslag ----------
@@ -95,9 +113,20 @@
     s.vaste ||= { items: [] };
     s.school ||= { kinderen: [] };
     s.wensen ||= { ...STANDAARD_WENSEN };
-    s.lijst ||= { items: [], status: "open" };
+    s.lijst ||= { items: [] };
+    s.lijst.items ||= [];
+    s.producten ||= {};
+    s.bestellingen ||= [];
+    s.ah ||= null;
     s.volgende ||= null;
     s._ts ||= {};
+    // Oude opzet (één lijst met status) omzetten naar een bestelling.
+    const l = s.lijst;
+    if (l.klaarOp && l.bestelling?.length && !s.bestellingen.some((b) => b.klaarOp === l.klaarOp)) {
+      s.bestellingen.push({ id: uid(), week: null, klaarOp: l.klaarOp, items: l.bestelling, mandje: l.mandje || null, ah: l.bezorging || null,
+        status: l.binnenOp ? "binnen" : l.bezorging ? "besteld" : l.mandje ? "gevuld" : l.verstuurdOp ? "verstuurd" : "verlopen", binnenOp: l.binnenOp || null });
+    }
+    for (const k of ["status", "klaarOp", "verstuurdOp", "bestelling", "mandje", "bezorging", "binnenOp"]) delete l[k];
     return s;
   }
 
@@ -121,7 +150,7 @@
     async haal() {
       try {
         const res = await fetch("data/volgende.json", { cache: "no-store" });
-        if (res.status === 404) { this.status = "aan"; this.laatst = new Date(); await this.mandje(); return false; }
+        if (res.status === 404) { this.status = "aan"; this.laatst = new Date(); await this.bestellingen(); return false; }
         if (!res.ok) throw new Error(`server gaf ${res.status}`);
         const data = await res.json();
         this.status = "aan"; this.fout = ""; this.laatst = new Date();
@@ -130,8 +159,8 @@
         const laatsteDag = data?.dagen?.[data.dagen.length - 1]?.datum;
         if (data?.week && data.dagen?.length && laatsteDag >= vandaagISO()) {
           if (!al.includes(data.week)) { state.volgende = data; nieuw = veranderd = true; }
-          else if (state.volgende?.week === data.week && state.volgende.status !== "akkoord" && data.gemaaktOp && data.gemaaktOp !== state.volgende.gemaaktOp) {
-            state.volgende = data; veranderd = true; // bijgewerkt voorstel (zaterdagcontrole)
+          else if (state.volgende?.week === data.week && !state.volgende.aangepast && !bestellingVoor(data.week) && data.gemaaktOp && data.gemaaktOp !== state.volgende.gemaaktOp) {
+            state.volgende = data; veranderd = true; // bijgewerkt door de zaterdagcontrole, en jij had nog niets veranderd of besteld
           }
         }
         for (const r of data?.recepten || []) {
@@ -144,40 +173,44 @@
           render();
           if (nieuw) toast("Het weekmenu voor volgende week staat klaar. Bekijk het onder Weekmenu.");
         }
-        await this.mandje();
+        await this.bestellingen();
         return veranderd;
       } catch (e) { this.status = "fout"; this.fout = e.message; return false; }
     },
-    // Na het doorsturen: kijk of Claude het AH-mandje al gevuld heeft (data/mandje.json).
-    // Daarna: is de bestelling echt geplaatst bij AH? (data/bezorging.json, geschreven door de desktop-taak)
-    async bezorging() {
-      const l = state.lijst;
-      if (!l?.mandje || l.binnenOp) return false;
-      try {
-        const res = await fetch("data/bezorging.json", { cache: "no-store" });
-        if (!res.ok) return false;
-        const b = await res.json();
-        if (b?.klaarOp !== l.klaarOp || !["besteld", "bezorgd"].includes(b.status)) return false;
-        if (JSON.stringify(b) === JSON.stringify(l.bezorging)) return false;
-        const nieuw = !l.bezorging;
-        l.bezorging = b; bewaar(); render();
-        if (nieuw) toast(`Besteld bij AH${b.bezorgmoment?.van ? `, bezorging ${fmtMoment(b.bezorgmoment)}` : ""}.`);
-        return true;
-      } catch { return false; }
-    },
-    async mandje() {
-      const l = state.lijst;
-      if (l?.mandje) return this.bezorging();
-      if (!l?.verstuurdOp) return false;
-      try {
-        const res = await fetch("data/mandje.json", { cache: "no-store" });
-        if (!res.ok) return false;
-        const m = await res.json();
-        if (m?.klaarOp !== l.klaarOp || m.status !== "gevuld") return false;
-        l.mandje = m; bewaar(); render();
-        if (!(await this.bezorging())) toast("Je AH-mandje is gevuld. Rond de bestelling af bij Boodschappen.");
-        return true;
-      } catch { return false; }
+    // Volgt de bestellingen: is het AH-mandje gevuld (data/mandje.json) en wat is er bij AH besteld
+    // (data/ah-bestellingen.json, ook bestellingen die je zelf in de AH-app deed). Beide schrijft de desktop-taak.
+    async bestellingen() {
+      let veranderd = false;
+      const lees = async (pad) => { try { const r = await fetch(pad, { cache: "no-store" }); return r.ok ? await r.json() : null; } catch { return null; } };
+      const [m, ah] = await Promise.all([lees("data/mandje.json"), lees("data/ah-bestellingen.json")]);
+      if (m?.status === "gevuld") {
+        const b = state.bestellingen.find((x) => x.klaarOp === m.klaarOp);
+        if (b && b.status === "verstuurd") { b.status = "gevuld"; b.mandje = m; veranderd = true; toast("Je AH-mandje is gevuld. Rond de bestelling af bij AH."); }
+        for (const k of m.keuzes || []) leerProduct(k);
+      }
+      if (ah?.bestellingen) {
+        state.ah = { bijgewerkt: ah.bijgewerkt, bestellingen: ah.bestellingen.slice(0, 8) };
+        for (const o of ah.bestellingen) {
+          const links = [].concat(o.klaarOps || [], o.klaarOp || []);
+          let eigen = state.bestellingen.filter((b) => links.includes(b.klaarOp) || (o.nummer && b.ah?.nummer === o.nummer));
+          if (!eigen.length) {
+            // Zelf besteld in de AH-app: neem hem op, zodat de lijst niet opnieuw volloopt en hij straks de voorraad in kan.
+            if (!o.nummer || !o.geplaatstOp || (Date.now() - new Date(o.geplaatstOp)) > 14 * 864e5) continue;
+            const b = { id: uid(), week: null, klaarOp: null, bron: "ah-app", items: o.items || [], status: "besteld", ah: o };
+            state.bestellingen.push(b); eigen = [b]; veranderd = true;
+            toast(`Bestelling bij AH gezien${o.bezorgmoment?.van ? `, bezorging ${fmtMoment(o.bezorgmoment)}` : ""}.`);
+          }
+          for (const b of eigen) {
+            if (b.status === "binnen" || JSON.stringify(b.ah) === JSON.stringify(o)) continue;
+            const eerst = b.status !== "besteld";
+            b.ah = o; b.status = "besteld"; veranderd = true;
+            if (eerst) toast(`Besteld bij AH${o.bezorgmoment?.van ? `, bezorging ${fmtMoment(o.bezorgmoment)}` : ""}.`);
+          }
+        }
+      }
+      if (verloopOud()) veranderd = true;
+      if (veranderd) { bewaar(); render(); }
+      return veranderd;
     },
     duw() { /* tablet schrijft niet terug naar de repo */ }
   };
@@ -186,35 +219,39 @@
   // De tablet vraagt Claude rechtstreeks om voorstellen. De API-sleutel blijft op deze tablet.
   // Geen SDK: de app heeft geen bouwstap, dus een gewone fetch naar de Messages API.
   const CLAUDE_SLEUTEL = "keukenbord.claudesleutel";
+  const EENHEID_ENUM = ["g", "kg", "ml", "l", "stuks", "blik", "pak", "zak", "pot", "fles", "bos"];
   const GERECHT_SCHEMA = {
     type: "object", additionalProperties: false, required: ["gerechten"],
     properties: { gerechten: { type: "array", items: {
       type: "object", additionalProperties: false,
-      required: ["gerecht", "waarom", "tijd", "kosten", "bonus", "kindertip", "ingredienten", "stappen"],
+      required: ["gerecht", "waarom", "tijd", "kosten", "porties", "bonus", "kindertip", "ingredienten", "benodigdheden", "voorbereiding", "stappen"],
       properties: {
-        gerecht: { type: "string" }, waarom: { type: "string" }, tijd: { type: "integer" }, kosten: { type: "number" },
+        gerecht: { type: "string" }, waarom: { type: "string" }, tijd: { type: "integer" }, kosten: { type: "number" }, porties: { type: "integer" },
         bonus: { type: "array", items: { type: "string" } }, kindertip: { type: "string" },
         ingredienten: { type: "array", items: { type: "object", additionalProperties: false, required: ["naam", "hoeveelheid", "eenheid"],
-          properties: { naam: { type: "string" }, hoeveelheid: { type: "number" }, eenheid: { type: "string", enum: ["g", "kg", "ml", "l", "stuks", "blik", "pak", "zak", "pot", "fles", "bos"] } } } },
+          properties: { naam: { type: "string" }, hoeveelheid: { type: "number" }, eenheid: { type: "string", enum: EENHEID_ENUM } } } },
+        benodigdheden: { type: "array", items: { type: "string" } },
+        voorbereiding: { type: "array", items: { type: "string" } },
         stappen: { type: "array", items: { type: "string" } }
       } } } }
   };
+  const PRODUCT_SCHEMA = {
+    type: "object", additionalProperties: false, required: ["opties"],
+    properties: { opties: { type: "array", items: {
+      type: "object", additionalProperties: false, required: ["product", "hoeveelheid", "eenheid", "categorie", "toelichting"],
+      properties: { product: { type: "string" }, hoeveelheid: { type: "number" }, eenheid: { type: "string", enum: EENHEID_ENUM },
+        categorie: { type: "string", enum: WINKEL_VOLGORDE }, toelichting: { type: "string" } } } } }
+  };
+  // Zo schrijft Claude recepten die je echt kunt volgen; ook gebruikt in docs/weekmenu-routine.md.
+  const RECEPT_EISEN = `Schrijf elk recept zo dat iemand die niet vaak kookt het kan volgen:
+- voorbereiding: wat je vooraf klaarzet en snijdt (met hoe: "ui in kleine blokjes", "paprika in reepjes").
+- benodigdheden: pannen, ovenschaal, staafmixer en dergelijke.
+- stappen: 6 tot 12 stappen in de goede volgorde. Noem in elke stap het vuur of de oventemperatuur, hoe lang (in minuten, bijvoorbeeld "8 minuten") en waaraan je ziet dat het goed is. Eén handeling per stap. Zet ingrediënten met hoeveelheid in de stap waar je ze gebruikt.
+- Laatste stap: opdienen, met wat je voor de kleinsten anders doet.`;
   const claude = {
     sleutel() { try { return localStorage.getItem(CLAUDE_SLEUTEL) || ""; } catch { return ""; } },
-    async ideeen(idee, dag, menu) {
-      const anderen = menu.dagen.filter((x) => x !== dag && !x.geschrapt).map((x) => `${dagNaam(x.datum)}: ${x.gerecht}`).join("; ");
-      const bonus = [...new Set(menu.dagen.flatMap((x) => x.bonus || []))].join(", ");
-      const voorraad = state.voorraad.items.filter((v) => v.hoeveelheid > 0).map((v) => `${v.naam} (${v.hoeveelheid} ${v.eenheid})`).join(", ");
-      const vraag = `Stel 3 avondgerechten voor ${dagNaam(dag.datum)} voor op basis van dit idee van het gezin: "${idee}".
-
-${wensenTekst()}
-Voordelig, boodschappen bij Albert Heijn.${dag.datum && new Date(dag.datum).getDay() % 6 ? ` Het is doordeweeks: maximaal ${state.wensen.maxTijd} minuten.` : ""}
-Vervangt: ${dag.gerecht || "nog niets"}.
-Andere avonden deze week (niet herhalen): ${anderen || "geen"}.
-Bonusproducten in dit menu, gebruik ze waar het past: ${bonus || "onbekend"}.
-In huis: ${voorraad || "onbekend"}.
-
-Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij het idee, bereidingstijd in minuten, geschatte kosten in euro voor het hele gezin, welke bonusproducten erin zitten, een tip voor de kleintjes, ingrediënten met hoeveelheid en eenheid (gebruik dezelfde namen als in de voorraad waar dat kan), en korte bereidingsstappen. Maak de 3 voorstellen echt verschillend.`;
+    // Eén vraag aan Claude met een vast antwoordformaat (JSON volgens schema).
+    async vraag(tekst, schema) {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -225,9 +262,9 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
         },
         body: JSON.stringify({
           model: "claude-opus-5-5",
-          max_tokens: 8000,
-          output_config: { effort: "low", format: { type: "json_schema", schema: GERECHT_SCHEMA } },
-          messages: [{ role: "user", content: vraag }]
+          max_tokens: 12000,
+          output_config: { effort: "low", format: { type: "json_schema", schema } },
+          messages: [{ role: "user", content: tekst }]
         })
       });
       const data = await res.json().catch(() => ({}));
@@ -238,8 +275,32 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
       }
       if (data.stop_reason === "refusal") throw new Error("Claude wilde dit niet uitwerken");
       if (data.stop_reason === "max_tokens") throw new Error("het antwoord werd te lang");
-      const tekst = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
-      return JSON.parse(tekst).gerechten || [];
+      return JSON.parse((data.content || []).filter((b) => b.type === "text").map((b) => b.text).join(""));
+    },
+    async ideeen(idee, dag, menu) {
+      const anderen = menu.dagen.filter((x) => x !== dag && !x.geschrapt).map((x) => `${dagNaam(x.datum)}: ${x.gerecht}`).join("; ");
+      const bonus = [...new Set(menu.dagen.flatMap((x) => x.bonus || []))].join(", ");
+      const voorraad = state.voorraad.items.filter((v) => v.hoeveelheid > 0).map((v) => `${v.naam} (${v.hoeveelheid} ${v.eenheid})`).join(", ");
+      const weekdag = parseISO(dag.datum).getDay() % 6 !== 0;
+      const vraag = `Stel 3 avondgerechten voor ${dagNaam(dag.datum)} voor op basis van dit idee van het gezin: "${idee}".
+
+${wensenTekst()}
+Voordelig, boodschappen bij Albert Heijn.${weekdag ? ` Het is doordeweeks: maximaal ${state.wensen.maxTijd} minuten.` : ""}
+Vervangt: ${dag.gerecht || "nog niets"}.
+Andere avonden deze week (niet herhalen): ${anderen || "geen"}.
+Bonusproducten in dit menu, gebruik ze waar het past: ${bonus || "onbekend"}.
+In huis: ${voorraad || "onbekend"}.
+
+Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij het idee, bereidingstijd in minuten, geschatte kosten in euro voor het hele gezin, aantal porties, welke bonusproducten erin zitten, een tip voor de kleintjes en ingrediënten met hoeveelheid en eenheid (gebruik dezelfde namen als in de voorraad waar dat kan). Maak de 3 voorstellen echt verschillend.
+
+${RECEPT_EISEN}`;
+      return (await this.vraag(vraag, GERECHT_SCHEMA)).gerechten || [];
+    },
+    async productOpties(naam, gebruik) {
+      const vraag = `Op de boodschappenlijst van een gezin staat "${naam}"${gebruik ? ` (${gebruik})` : ""}. Ze bestellen bij Albert Heijn.
+${wensenTekst()}
+Geef 5 gangbare, concrete varianten die bij AH te koop zijn, van voordelig (AH-huismerk) tot iets luxer, met een typische verpakkingsgrootte. Denk aan soort, vorm en smaak, bijvoorbeeld bij kaas: jong belegen plakken, geraspt, blok. Noem bij product de naam zoals AH hem ongeveer verkoopt. toelichting: één korte zin waarvoor het handig is. categorie: het schap waar het ligt.`;
+      return (await this.vraag(vraag, PRODUCT_SCHEMA)).opties || [];
     }
   };
 
@@ -272,48 +333,126 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
   function menuVan(iso) { return state.volgende?.dagen?.some((d) => d.datum === iso) ? state.volgende : state.menu; }
   // Voor de boodschappen telt het menu van volgende week zodra dat er is.
   function bestelMenu() { return state.volgende?.dagen?.length ? state.volgende : state.menu; }
-  function vindVoorraad(naam, eenheid) {
+  function weekBereik(m) {
+    const d = (m?.dagen || []).map((x) => x.datum).sort();
+    return d.length ? `${dagNaam(d[0]).slice(0, 2)} ${korteDatum(d[0])} – ${dagNaam(d[d.length - 1]).slice(0, 2)} ${korteDatum(d[d.length - 1])}` : "";
+  }
+  // Zoek in de voorraad: eerst exact, anders een algemenere naam ("aardappelen" voor "kruimige aardappelen"),
+  // maar nooit een specifiekere ("geraspte kaas" is niet zomaar "kaas").
+  function vindVoorraad(naam, eenheid, exact = false) {
     const n = norm(naam);
-    const kandidaten = state.voorraad.items.filter((v) => norm(v.naam) === n || norm(v.naam).includes(n) || n.includes(norm(v.naam)));
-    return kandidaten.find((v) => v.eenheid === eenheid) || kandidaten[0] || null;
+    const precies = state.voorraad.items.filter((v) => norm(v.naam) === n);
+    const kandidaten = precies.length || exact ? precies : state.voorraad.items.filter((v) => new RegExp(`(^|\\s)${norm(v.naam).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`).test(n));
+    const basis = naarBasis(0, eenheid)[1];
+    return kandidaten.find((v) => v.eenheid === eenheid) || kandidaten.find((v) => naarBasis(0, v.eenheid)[1] === basis) || kandidaten[0] || null;
+  }
+  // Hoeveel er in huis is, in de basiseenheid van "eenheid" (0 als de eenheden niet te vergelijken zijn).
+  function inHuis(naam, eenheid) {
+    const v = vindVoorraad(naam, eenheid);
+    if (!v) return 0;
+    const [h, e] = naarBasis(v.hoeveelheid, v.eenheid);
+    return e === naarBasis(0, eenheid)[1] ? h : 0;
   }
   function inHuisVoor(ing) {
-    const v = vindVoorraad(ing.naam, ing.eenheid);
-    if (!v || v.eenheid !== ing.eenheid) return { status: "nee", v };
-    return { status: v.hoeveelheid >= ing.hoeveelheid ? "ja" : v.hoeveelheid > 0 ? "deels" : "nee", v };
+    const heb = inHuis(ing.naam, ing.eenheid), nodig = naarBasis(ing.hoeveelheid, ing.eenheid)[0];
+    return { status: heb >= nodig ? "ja" : heb > 0 ? "deels" : "nee" };
   }
 
-  // Zet de bezorgde boodschappen in de voorraad. Gebruikt de echte hoeveelheden uit bezorging.json als die er zijn.
-  function boekBinnen(overslaan = new Set()) {
-    const l = state.lijst;
-    const backup = JSON.stringify({ voorraad: state.voorraad, vaste: state.vaste, lijst: l });
-    const items = l.bezorging?.items?.length ? l.bezorging.items : (l.bestelling || []);
-    const mist = new Set((l.bezorging?.nietGeleverd || []).map((v) => norm(typeof v === "string" ? v : v.naam)));
-    const naarBasis = (h, e) => e === "kg" ? [h * 1000, "g"] : e === "l" ? [h * 1000, "ml"] : [h, e];
+  // ---------- Producten: welke kaas precies? ----------
+  // Per artikel onthoudt de tablet welk AH-product jullie nemen. Kies je zelf, dan blijft dat zo;
+  // anders onthoudt hij wat Claude bij AH koos (op basis van wat jullie eerder kochten).
+  function product(naam) { return state.producten[norm(naam)] || null; }
+  function leerProduct(k) {
+    if (!k?.naam || !k.product) return;
+    const cur = product(k.naam);
+    if (cur?.bron === "jij") return;
+    state.producten[norm(k.naam)] = { naam: k.naam, keuze: k.product, verpakking: k.verpakking || null, categorie: cur?.categorie || null, bron: "AH" };
+  }
+  function winkelGroep(it) {
+    if (it.groep === "huishouden") return "Huishouden";
+    if (it.groep === "school") return "Mee naar school";
+    const p = product(it.naam); if (p?.categorie) return p.categorie;
+    const v = vindVoorraad(it.naam, it.eenheid); const n = norm(it.naam);
+    for (const [g, re] of WINKEL_HERKEN) if (re.test(n)) return g;
+    if (v?.categorie === "Groente en fruit") return "Groente en fruit";
+    return "Overig";
+  }
+  // "1× 400 g" als we de verpakking kennen, anders de hoeveelheid zelf.
+  function inPakken(it) {
+    const vp = product(it.naam)?.verpakking;
+    if (vp?.hoeveelheid > 0) {
+      const [h, e] = naarBasis(it.hoeveelheid, it.eenheid), [vh, ve] = naarBasis(vp.hoeveelheid, vp.eenheid);
+      if (e === ve) { const n = Math.max(1, Math.ceil(h / vh - 0.05)); return { aantal: n, tekst: `${n}× ${fmtHoeveel(vp.hoeveelheid, vp.eenheid)}` }; }
+    }
+    return { aantal: null, tekst: fmtHoeveel(it.hoeveelheid, it.eenheid) };
+  }
+
+  // ---------- Bestellingen ----------
+  // status: verstuurd → gevuld (in AH-mandje) → besteld → binnen. "verlopen" = nooit besteld.
+  const LOPEND = ["verstuurd", "gevuld", "besteld"];
+  function bestellingVoor(week) { return week ? state.bestellingen.find((b) => b.week === week && b.status !== "verlopen") : null; }
+  function laatsteBestelling() { return [...state.bestellingen].reverse().find((b) => b.status !== "verlopen") || null; }
+  // Lopende bestellingen, de belangrijkste eerst: binnen-vraag, dan afronden bij AH, dan de rest.
+  function lopendeBestellingen() {
+    const gewicht = (b) => isBezorgd(b) ? 0 : b.status === "gevuld" ? 1 : b.status === "verstuurd" ? 2 : 3;
+    return state.bestellingen.filter((b) => LOPEND.includes(b.status)).sort((a, b) => gewicht(a) - gewicht(b));
+  }
+  function isBezorgd(b) { return b.status === "besteld" && (b.ah?.status === "bezorgd" || (b.ah?.bezorgmoment?.van && new Date() >= new Date(b.ah.bezorgmoment.van))); }
+  function verloopOud() {
+    let x = false;
+    for (const b of state.bestellingen) {
+      const oud = b.klaarOp && (Date.now() - new Date(b.klaarOp)) > 7 * 864e5;
+      if ((b.status === "verstuurd" || b.status === "gevuld") && oud) { b.status = "verlopen"; x = true; }
+    }
+    if (state.bestellingen.length > 12) { state.bestellingen = state.bestellingen.slice(-12); x = true; }
+    return x;
+  }
+  // Wat al besteld is maar nog niet binnen: telt mee alsof het er al is.
+  function onderwegKaart() {
+    const map = new Map();
+    for (const b of state.bestellingen) {
+      if (!LOPEND.includes(b.status)) continue;
+      const mist = new Set((b.ah?.nietGeleverd || []).map((v) => norm(typeof v === "string" ? v : v.naam)));
+      for (const it of (b.ah?.items?.length ? b.ah.items : b.items)) {
+        if (mist.has(norm(it.naam))) continue;
+        const [h, e] = naarBasis(it.hoeveelheid, it.eenheid);
+        const k = norm(it.naam) + "|" + e;
+        map.set(k, (map.get(k) || 0) + h);
+      }
+    }
+    return map;
+  }
+
+  // Zet de bezorgde boodschappen in de voorraad, met de echte hoeveelheden van AH als die er zijn.
+  function boekBinnen(b, overslaan = new Set()) {
+    const backup = JSON.stringify({ voorraad: state.voorraad, vaste: state.vaste, bestellingen: state.bestellingen });
+    const items = b.ah?.items?.length ? b.ah.items : b.items;
+    const mist = new Set((b.ah?.nietGeleverd || []).map((v) => norm(typeof v === "string" ? v : v.naam)));
     let n = 0;
-    for (const it of items) {
+    for (let it of items) {
       if (overslaan.has(norm(it.naam)) || mist.has(norm(it.naam))) continue;
-      if (it.groep === "huishouden") {
-        const v = state.vaste.items.find((x) => norm(x.naam) === norm(it.naam));
-        if (v) { v.laatst = vandaagISO(); v.opLijst = false; n++; }
-        continue;
-      }
+      const vast = state.vaste.items.find((x) => norm(x.naam) === norm(it.naam));
+      if (it.groep === "huishouden" || vast) { if (vast) { vast.laatst = vandaagISO(); vast.opLijst = false; n++; } continue; }
       if (BASIS.has(norm(it.naam))) continue;
-      const v = vindVoorraad(it.naam, it.eenheid);
+      // "2 stuks" kaas met een bekende verpakking van 400 g wordt 800 g in de voorraad.
+      const vp = it.verpakking || product(it.naam)?.verpakking;
+      if (it.eenheid === "stuks" && vp?.hoeveelheid > 0 && vp.eenheid !== "stuks") it = { ...it, hoeveelheid: it.hoeveelheid * vp.hoeveelheid, eenheid: vp.eenheid };
+      const v = vindVoorraad(it.naam, it.eenheid, true);
       const [h, e] = naarBasis(Number(it.hoeveelheid) || 0, it.eenheid);
-      if (v) {
-        const ve = naarBasis(0, v.eenheid)[1];
-        if (ve === e) { v.hoeveelheid = +(v.hoeveelheid + (v.eenheid === "kg" || v.eenheid === "l" ? h / 1000 : h)).toFixed(3); n++; continue; }
-      }
-      state.voorraad.items.push({ id: uid(), naam: cap(it.naam), hoeveelheid: h, eenheid: e, categorie: it.groep === "school" ? "School" : "Boodschappen" });
+      if (v && naarBasis(0, v.eenheid)[1] === e) { v.hoeveelheid = +(v.hoeveelheid + vanBasis(h, v.eenheid)).toFixed(3); n++; continue; }
+      state.voorraad.items.push({ id: uid(), naam: norm(it.naam), hoeveelheid: h, eenheid: e, categorie: plekVoor(winkelGroep(it)) });
       n++;
     }
-    l.binnenOp = new Date().toISOString();
+    b.status = "binnen"; b.binnenOp = new Date().toISOString();
     bewaar(); render();
     toast(`${n} artikelen in de voorraad gezet.`, () => {
-      const b = JSON.parse(backup);
-      state.voorraad = b.voorraad; state.vaste = b.vaste; state.lijst = b.lijst; bewaar(); render();
+      const o = JSON.parse(backup);
+      state.voorraad = o.voorraad; state.vaste = o.vaste; state.bestellingen = o.bestellingen; bewaar(); render();
     });
+  }
+  // Schap in de winkel → plek in huis.
+  function plekVoor(groep) {
+    return { "Groente en fruit": "Groente en fruit", "Vlees en vis": "Koelkast", "Kaas, zuivel en eieren": "Koelkast", "Brood en ontbijt": "Brood en ontbijt", "Diepvries": "Vriezer", "Mee naar school": "School", "Drinken": "Voorraadkast", "Voorraadkast": "Voorraadkast" }[groep] || "Overig";
   }
 
   function kook(datum) {
@@ -324,9 +463,9 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     for (const ing of dag.ingredienten || []) {
       if (BASIS.has(norm(ing.naam))) continue;
       const v = vindVoorraad(ing.naam, ing.eenheid);
-      if (!v) { nietAfgeboekt.push(ing.naam); continue; }
-      if (v.eenheid !== ing.eenheid) { nietAfgeboekt.push(ing.naam); continue; }
-      v.hoeveelheid = Math.max(0, +(v.hoeveelheid - ing.hoeveelheid).toFixed(3));
+      const [h, e] = naarBasis(ing.hoeveelheid, ing.eenheid);
+      if (!v || naarBasis(0, v.eenheid)[1] !== e) { nietAfgeboekt.push(ing.naam); continue; }
+      v.hoeveelheid = Math.max(0, +(v.hoeveelheid - vanBasis(h, v.eenheid)).toFixed(3));
     }
     dag.gekookt = true;
     dag.gekooktOp = new Date().toISOString();
@@ -344,51 +483,74 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
   }
 
   // ---------- Boodschappenlijst berekenen ----------
+  // Nodig = menu (nog niet gekookt) + school + minimale voorraad. Daar gaat af wat in huis is en wat onderweg is.
+  // Plus huishoudproducten die bijna op zijn en wat je zelf toevoegt.
   function berekenLijst() {
     const nodig = new Map();
-    const voeg = (naam, h, e, bron) => {
-      const k = norm(naam) + "|" + e;
-      const x = nodig.get(k) || { naam, hoeveelheid: 0, eenheid: e, bronnen: new Set() };
-      x.hoeveelheid += Number(h) || 0; x.bronnen.add(bron); nodig.set(k, x);
-    };
-    for (const d of bestelMenu().dagen) {
-      if (d.geschrapt || d.gekookt) continue;
-      for (const ing of d.ingredienten || []) if (!BASIS.has(norm(ing.naam))) voeg(ing.naam, ing.hoeveelheid, ing.eenheid, dagNaam(d.datum));
-    }
-    const school = new Map();
-    for (const kind of state.school.kinderen) for (const it of kind.items) {
-      const k = norm(it.naam) + "|" + it.eenheid;
-      const x = school.get(k) || { naam: it.naam, hoeveelheid: 0, eenheid: it.eenheid, bronnen: new Set() };
-      x.hoeveelheid += it.perDag * kind.dagen; x.bronnen.add(kind.naam); school.set(k, x);
-    }
-    const splits = (map) => {
-      const koop = [], huis = [];
-      for (const x of map.values()) {
-        const v = vindVoorraad(x.naam, x.eenheid);
-        const heb = v && v.eenheid === x.eenheid ? v.hoeveelheid : 0;
-        const tekort = +(x.hoeveelheid - heb).toFixed(3);
-        const item = { naam: x.naam, eenheid: x.eenheid, nodig: x.hoeveelheid, heb, bronnen: [...x.bronnen] };
-        if (tekort > 0) koop.push({ ...item, hoeveelheid: tekort }); else huis.push(item);
-      }
-      koop.sort((a, b) => a.naam.localeCompare(b.naam)); huis.sort((a, b) => a.naam.localeCompare(b.naam));
-      return { koop, huis };
+    const voeg = (naam, h, e, groep, waarom) => {
+      const [bh, be] = naarBasis(h, e);
+      const k = norm(naam) + "|" + be;
+      const x = nodig.get(k) || { naam: norm(naam), hoeveelheid: 0, eenheid: be, groep, waarom: [] };
+      x.hoeveelheid += bh; if (waarom && !x.waarom.includes(waarom)) x.waarom.push(waarom);
+      if (groep === "menu") x.groep = "menu";
+      nodig.set(k, x);
     };
     const vandaag = vandaagISO();
-    const vaste = state.vaste.items.filter((v) => v.opLijst || dagenTussen(v.laatst, vandaag) >= v.intervalDagen - 3)
-      .map((v) => ({ naam: v.naam, hoeveelheid: v.aantal || 1, eenheid: "stuks", reden: v.opLijst ? "Zelf op de lijst gezet" : resterend(v) }));
-    return { menu: splits(nodig), school: splits(school), vaste, eigen: state.lijst.items };
+    for (const d of bestelMenu().dagen) {
+      if (d.geschrapt || d.gekookt || d.datum < vandaag) continue;
+      for (const ing of d.ingredienten || []) if (!BASIS.has(norm(ing.naam))) voeg(ing.naam, ing.hoeveelheid, ing.eenheid, "menu", dagNaam(d.datum));
+    }
+    for (const kind of state.school.kinderen) for (const it of kind.items) voeg(it.naam, it.perDag * kind.dagen, it.eenheid, "school", kind.naam.replace(/\s*\(.*\)/, ""));
+    for (const v of state.voorraad.items) if (v.min > 0) voeg(v.naam, v.min, v.eenheid, "basis", "altijd in huis");
+    const onderweg = onderwegKaart();
+    const koop = [], huis = [], weg = [];
+    for (const [k, x] of nodig) {
+      const heb = inHuis(x.naam, x.eenheid), komt = onderweg.get(k) || 0;
+      const tekort = +(x.hoeveelheid - heb - komt).toFixed(3);
+      const item = { ...x, nodig: x.hoeveelheid, heb, komt, sleutel: k };
+      if (tekort > 0) koop.push({ ...item, hoeveelheid: tekort });
+      else if (komt > 0 && heb < x.hoeveelheid) weg.push(item);
+      else huis.push(item);
+    }
+    for (const v of state.vaste.items) {
+      const op = v.opLijst || dagenTussen(v.laatst, vandaag) >= v.intervalDagen - 3;
+      if (!op) continue;
+      const k = norm(v.naam) + "|stuks";
+      if (onderweg.has(k)) { weg.push({ naam: v.naam, eenheid: "stuks", nodig: v.aantal || 1, komt: onderweg.get(k), groep: "huishouden", sleutel: k, waarom: [] }); continue; }
+      koop.push({ naam: v.naam, hoeveelheid: v.aantal || 1, eenheid: "stuks", groep: "huishouden", waarom: [v.opLijst ? "zelf op de lijst gezet" : resterend(v).toLowerCase()], sleutel: k, vastId: v.id });
+    }
+    for (const x of state.lijst.items) koop.push({ naam: x.naam, hoeveelheid: x.aantal, eenheid: x.eenheid || "stuks", groep: "eigen", waarom: ["zelf toegevoegd"], sleutel: "eigen|" + x.id, eigenId: x.id });
+    for (const it of koop) it.schap = winkelGroep(it);
+    koop.sort((a, b) => WINKEL_VOLGORDE.indexOf(a.schap) - WINKEL_VOLGORDE.indexOf(b.schap) || a.naam.localeCompare(b.naam));
+    return { koop, huis, weg };
   }
   function resterend(v) {
     const over = v.intervalDagen - dagenTussen(v.laatst, vandaagISO());
     return over <= 0 ? "Waarschijnlijk op" : over === 1 ? "Nog ongeveer 1 dag" : `Nog ongeveer ${over} dagen`;
   }
-  function aantalTeKopen() {
-    const l = berekenLijst();
-    return l.menu.koop.length + l.school.koop.length + l.vaste.length + l.eigen.length;
-  }
+  function aantalTeKopen() { return berekenLijst().koop.length; }
 
   // ---------- Schermen ----------
   const views = {};
+
+  // Korte melding bovenaan Vandaag over de boodschappen, alleen als er iets te doen is.
+  function bestelMelding() {
+    const b = lopendeBestellingen()[0];
+    if (b && isBezorgd(b)) return `<div class="status-band"><div><b>Zijn de boodschappen binnen?</b><div class="sub">Zet ze met één tik in de voorraad.</div></div><button class="btn primair" data-goto="boodschappen">Naar boodschappen</button></div>`;
+    if (b?.status === "gevuld") {
+      const uiterlijk = bestelUiterlijk();
+      const laat = uiterlijk && new Date() >= uiterlijk;
+      return `<div class="status-band ${laat ? "let-op" : ""}"><div><b>${laat ? "Nog niet besteld bij AH" : "Je AH-mandje staat klaar"}</b><div class="sub">Kies een bezorgmoment en reken af bij AH.${laat ? " De eerste kookdag komt eraan." : ""}</div></div><a class="btn primair" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Afronden bij AH</a></div>`;
+    }
+    const m = bestelMenu();
+    if (m.dagen?.length && !m.voorbeeld && !bestellingVoor(m.week) && m === state.volgende) {
+      return `<div class="status-band"><div><b>Het menu voor volgende week staat klaar</b><div class="sub">Pas aan wat je anders wilt en bestel dan de boodschappen.</div></div><button class="btn primair" data-act="naar-volgende">Bekijken</button></div>`;
+    }
+    return "";
+  }
+
+  // Tijd in een stap herkennen ("8 minuten", "10-12 min") voor een timer.
+  function stapMinuten(t) { const m = String(t).match(/(\d+)(?:\s*(?:-|–|tot)\s*(\d+))?\s*min/i); return m ? +(m[2] || m[1]) : 0; }
 
   views.vandaag = function () {
     const iso = ui.dag || vandaagISO();
@@ -400,52 +562,106 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
         ${isVandaag ? "" : '<button class="btn klein" data-act="dag" data-delta="0">Vandaag</button>'}
         <button class="btn klein" data-act="dag" data-delta="1" aria-label="Volgende dag">Volgende ›</button>
       </div>`;
-    const voorstel = state.volgende?.dagen?.length && state.volgende.status !== "akkoord"
-      ? `<div class="status-band"><div><b>Het menu voor volgende week staat klaar.</b><div class="sub">Bekijk het en geef akkoord${state.volgende.akkoordVoor ? ` vóór ${esc(state.volgende.akkoordVoor)}` : ""}, dan kan de bestelling op tijd de deur uit.</div></div><button class="btn primair" data-act="naar-volgende">Bekijken</button></div>` : "";
-    const l = state.lijst;
-    const uiterlijk = bestelUiterlijk();
-    const bestelStatus = l.binnenOp ? ""
-      : l.bezorging && (l.bezorging.status === "bezorgd" || (l.bezorging.bezorgmoment?.van && new Date() >= new Date(l.bezorging.bezorgmoment.van)))
-        ? `<div class="status-band"><div><b>Zijn de boodschappen binnen?</b><div class="sub">Zet ze met één tik in de voorraad.</div></div><button class="btn primair" data-goto="boodschappen">Naar boodschappen</button></div>`
-      : !l.bezorging && l.mandje && uiterlijk && new Date() >= uiterlijk
-        ? `<div class="status-band let-op"><div><b>Nog niet besteld bij AH</b><div class="sub">Je mandje is gevuld, maar er is nog geen bestelling gezien en de eerste kookdag komt eraan.</div></div><a class="btn primair" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Afronden bij AH</a></div>` : "";
-    const kop = `${bestelStatus}${voorstel}<div class="kop"><div><div class="eyebrow">${esc(cap(dagNaam(iso)))} ${esc(korteDatum(iso))}</div><h1>${esc(titel)}</h1></div>${nav}</div>`;
+    const kop = `${bestelMelding()}<div class="kop"><div><div class="eyebrow">${esc(cap(dagNaam(iso)))} ${esc(korteDatum(iso))}</div><h1>${esc(titel)}</h1></div>${nav}</div>`;
     if (!dag) {
       return kop + `<div class="paneel leeg"><h2>Nog geen gerecht voor deze dag</h2>
         <p>Zodra het weekmenu klaarstaat zie je hier het recept van de dag.</p>
         <button class="btn primair" data-goto="week">Naar het weekmenu</button></div>`;
     }
     if (dag.geschrapt) {
-      return kop + `<div class="paneel leeg"><h2>Vandaag geen kookavond</h2><p>Deze dag is uit het menu geschrapt. Restjes of uit eten?</p>
+      return kop + `<div class="paneel leeg"><h2>Geen kookavond</h2><p>Deze dag is uit het menu gehaald. Restjes of uit eten?</p>
         <button class="btn" data-act="herstel" data-datum="${dag.datum}">Gerecht terugzetten</button></div>`;
     }
     const stapStatus = ui.stappen[dag.datum] || [];
     const eersteOpen = (dag.stappen || []).findIndex((_, i) => !stapStatus[i]);
     const ingr = (dag.ingredienten || []).map((ing) => {
-      const st = inHuisVoor(ing);
-      const chip = st.status === "ja" ? '<span class="chip ok">In huis</span>' : st.status === "deels" ? '<span class="chip warn">Te weinig</span>' : '<span class="chip">Niet in voorraad</span>';
+      const st = BASIS.has(norm(ing.naam)) ? { status: "basis" } : inHuisVoor(ing);
+      const chip = st.status === "basis" ? "" : st.status === "ja" ? '<span class="chip ok">In huis</span>' : st.status === "deels" ? '<span class="chip warn">Te weinig</span>' : '<span class="chip">Niet in huis</span>';
       return `<li><span class="hoeveel">${esc(fmtHoeveel(ing.hoeveelheid, ing.eenheid))}</span><span>${esc(ing.naam)}</span>${dag.gekookt ? "" : chip}</li>`;
     }).join("");
-    const stappen = (dag.stappen || []).map((s, i) => `<li class="${stapStatus[i] ? "klaar" : ""} ${i === eersteOpen ? "actief" : ""}" data-act="stap" data-datum="${dag.datum}" data-i="${i}">${esc(s)}</li>`).join("");
-    const kookKnop = dag.gekookt
+    const stappen = (dag.stappen || []).map((t, i) => {
+      const min = stapMinuten(t);
+      return `<li class="${stapStatus[i] ? "klaar" : ""} ${i === eersteOpen ? "actief" : ""}"><span data-act="stap" data-datum="${dag.datum}" data-i="${i}">${esc(t)}</span>${min ? `<button class="timer-knop" data-act="timer" data-min="${min}" data-label="${esc(dag.gerecht)}: stap ${i + 1}">⏱ ${min} min</button>` : ""}</li>`;
+    }).join("");
+    const lijstje = (titel, xs) => xs?.length ? `<section class="paneel"><h3>${titel}</h3><ul class="vink-lijst">${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></section>` : "";
+    const knoppen = dag.gekookt
       ? `<div><span class="chip ok" style="font-size:16px;padding:8px 14px">Gekookt · voorraad bijgewerkt</span></div>`
-      : `<button class="btn accent kook-knop" data-act="kook" data-datum="${dag.datum}">Ik ga dit koken</button>`;
+      : `<div class="btn-rij kook-knoppen"><button class="btn accent kook-knop" data-act="kookmodus" data-datum="${dag.datum}">Start met koken</button>
+          <button class="btn klein" data-act="kook" data-datum="${dag.datum}">Al gekookt</button></div>`;
     return kop + `<div class="vandaag">
       <section class="gerecht-hero">
         <div>
           <div class="eyebrow">${dag.gekookt ? "Gekookt" : isVandaag ? "Vanavond" : "Op het menu"}${state.menu.voorbeeld ? ' · <span class="chip voorbeeld">Voorbeeld</span>' : ""}</div>
           <h2>${esc(dag.gerecht)}</h2>
-          <div class="hero-feiten">${dag.nieuw ? '<span class="chip nieuw">Nieuw gerecht</span>' : ""}<span><b>${esc(dag.tijd)}</b> minuten</span><span>ca. <b>${euro(dag.kosten)}</b> voor het gezin</span><span><b>4</b> porties</span>${(dag.bonus || []).map((b) => `<span class="chip bonus">Bonus: ${esc(b)}</span>`).join("")}</div>
-          ${dag.kindertip ? `<div class="kindertip"><b>Kindertip:</b> ${esc(dag.kindertip)}</div>` : ""}
+          <div class="hero-feiten">${dag.nieuw ? '<span class="chip nieuw">Nieuw gerecht</span>' : ""}<span><b>${esc(dag.tijd)}</b> minuten</span><span><b>${esc(dag.porties || 4)}</b> porties</span><span>ca. <b>${euro(dag.kosten)}</b></span>${(dag.bonus || []).map((b) => `<span class="chip bonus">Bonus: ${esc(b)}</span>`).join("")}</div>
+          ${dag.kindertip ? `<div class="kindertip"><b>Voor de kinderen:</b> ${esc(dag.kindertip)}</div>` : ""}
         </div>
-        ${kookKnop}
+        ${knoppen}
       </section>
       <section class="paneel"><h3>Ingrediënten</h3><ul class="ingr-lijst">${ingr}</ul>
-        <p class="sub">Bij "Ik ga dit koken" gaan deze ingrediënten automatisch van de voorraad af.</p></section>
-      <section class="paneel"><h3>Bereiding</h3><ol class="stappen">${stappen}</ol>
-        <p class="sub">Tik op een stap als die klaar is.</p></section>
+        <p class="sub">Als je klaar bent met koken, gaan deze ingrediënten van de voorraad af.</p></section>
+      ${lijstje("Pak alvast", dag.benodigdheden)}
+      ${lijstje("Voorbereiden", dag.voorbereiding)}
+      <section class="paneel recept-stappen"><h3>Zo maak je het</h3><ol class="stappen">${stappen}</ol>
+        <p class="sub">Tik op een stap als die klaar is. Met ⏱ zet je een kookwekker.</p></section>
     </div>`;
   };
+
+  // ---------- Kookmodus: één stap per scherm, groot, met kookwekker ----------
+  function toonKookmodus() {
+    const km = ui.kookmodus; const el = $("#kookmodus");
+    if (!km) { el.hidden = true; el.innerHTML = ""; return; }
+    const dag = dagVan(km.datum); if (!dag) { ui.kookmodus = null; return toonKookmodus(); }
+    const stappen = [...(dag.voorbereiding?.length ? [`Voorbereiden: ${dag.voorbereiding.join(" · ")}`] : []), ...(dag.stappen || [])];
+    const i = Math.min(km.i, stappen.length - 1), t = stappen[i] || "", min = stapMinuten(t);
+    const laatste = i >= stappen.length - 1;
+    el.hidden = false;
+    el.innerHTML = `<div class="km-kop"><div><div class="eyebrow">${esc(dag.gerecht)}</div><div class="km-teller">Stap ${i + 1} van ${stappen.length}</div></div>
+        <button class="btn klein" data-km="dicht">Sluiten</button></div>
+      <div class="km-balk"><i style="width:${Math.round(((i + 1) / stappen.length) * 100)}%"></i></div>
+      <div class="km-stap" key="${i}">${esc(t)}</div>
+      ${min ? `<button class="btn klein km-timer" data-km="timer" data-min="${min}">⏱ Kookwekker ${min} minuten</button>` : ""}
+      <details class="km-ingr"><summary>Ingrediënten</summary><ul>${(dag.ingredienten || []).map((x) => `<li><b>${esc(fmtHoeveel(x.hoeveelheid, x.eenheid))}</b> ${esc(x.naam)}</li>`).join("")}</ul></details>
+      <div class="km-nav"><button class="btn groot" data-km="terug" ${i === 0 ? "disabled" : ""}>‹ Vorige</button>
+        ${laatste ? `<button class="btn accent groot" data-km="klaar">Klaar, eet smakelijk</button>` : `<button class="btn primair groot" data-km="verder">Volgende ›</button>`}</div>`;
+  }
+  $("#kookmodus").addEventListener("click", (e) => {
+    const k = e.target.closest("[data-km]")?.dataset.km; if (!k || !ui.kookmodus) return;
+    const km = ui.kookmodus;
+    if (k === "dicht") ui.kookmodus = null;
+    if (k === "verder") km.i++;
+    if (k === "terug") km.i = Math.max(0, km.i - 1);
+    if (k === "timer") { const d = dagVan(km.datum); startTimer(+e.target.closest("[data-km]").dataset.min, `${d?.gerecht || "Koken"}: stap ${km.i + 1}`); }
+    if (k === "klaar") { const d = km.datum; ui.kookmodus = null; toonKookmodus(); kook(d); return; }
+    toonKookmodus();
+  });
+
+  // ---------- Kookwekkers ----------
+  const timers = [];
+  function startTimer(min, label) {
+    timers.push({ id: uid(), label, eind: Date.now() + min * 60000 });
+    toonTimers(); toast(`Kookwekker gezet: ${min} minuten.`);
+  }
+  function piep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.4, 0.8].forEach((t) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(0.3, ctx.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.3); o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.3); });
+    } catch {}
+  }
+  function toonTimers() {
+    const el = $("#timers"); const nu = Date.now();
+    el.hidden = !timers.length;
+    el.innerHTML = timers.map((t) => {
+      const over = Math.max(0, Math.round((t.eind - nu) / 1000));
+      return `<div class="timer ${over === 0 ? "af" : ""}"><span class="t-label">${esc(t.label)}</span><span class="t-tijd">${over === 0 ? "Klaar!" : `${Math.floor(over / 60)}:${String(over % 60).padStart(2, "0")}`}</span><button data-timer="${t.id}" aria-label="Kookwekker weg">×</button></div>`;
+    }).join("");
+  }
+  setInterval(() => {
+    if (!timers.length) return;
+    for (const t of timers) if (!t.gepiept && Date.now() >= t.eind) { t.gepiept = true; piep(); toast(`Kookwekker: ${t.label}`); }
+    toonTimers();
+  }, 1000);
+  $("#timers").addEventListener("click", (e) => { const id = e.target.closest("[data-timer]")?.dataset.timer; if (!id) return; timers.splice(timers.findIndex((t) => t.id === id), 1); toonTimers(); });
 
   views.week = function () {
     if (!ui.week) ui.week = state.volgende?.dagen?.length ? "volgende" : "deze";
@@ -454,18 +670,21 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     const m = ui.week === "volgende" ? state.volgende : state.menu;
     const tabs = heeftVolgende ? `<div class="btn-rij" role="tablist">
         <button class="btn klein ${ui.week === "deze" ? "primair" : ""}" data-act="weektab" data-week="deze" role="tab" aria-selected="${ui.week === "deze"}">Deze week</button>
-        <button class="btn klein ${ui.week === "volgende" ? "primair" : ""}" data-act="weektab" data-week="volgende" role="tab" aria-selected="${ui.week === "volgende"}">Volgende week${state.volgende.status !== "akkoord" ? " · nieuw" : ""}</button></div>` : "";
+        <button class="btn klein ${ui.week === "volgende" ? "primair" : ""}" data-act="weektab" data-week="volgende" role="tab" aria-selected="${ui.week === "volgende"}">Volgende week</button></div>` : "";
     if (!m.dagen.length) {
       return `<div class="kop"><div><div class="eyebrow">Weekmenu</div><h1>Nog geen weekmenu</h1></div></div>
-        <div class="paneel leeg"><h2>Het weekmenu van deze week komt hier</h2><p>Elke week verschijnt hier een voorstel op basis van de AH Bonus en wat er nog in huis is.</p>
+        <div class="paneel leeg"><h2>Het weekmenu komt hier</h2><p>Elke donderdag zet Claude hier het menu voor volgende week klaar, op basis van de AH Bonus, jullie wensen en wat er in huis is.</p>
         <button class="btn" data-act="voorbeeld">Voorbeeldweek laden</button></div>`;
     }
     const totaal = m.dagen.filter((d) => !d.geschrapt).reduce((s, d) => s + (Number(d.kosten) || 0), 0);
-    const band = m.status === "akkoord"
-      ? `<div class="status-band akkoord"><div><b>Je hebt dit menu goedgekeurd.</b><div class="sub">De ingrediënten staan op de boodschappenlijst.</div></div>
-          <div class="btn-rij"><button class="btn primair" data-goto="boodschappen">Naar boodschappen</button><button class="btn klein" data-act="heropen">Weer aanpassen</button></div></div>`
-      : `<div class="status-band"><div><b>Voorstel voor ${ui.week === "volgende" ? "volgende" : "deze"} week.</b><div class="sub">Wissel of schrap gerechten en geef daarna akkoord${m.akkoordVoor ? `, het liefst vóór ${esc(m.akkoordVoor)}` : ""}.</div></div>
-          <button class="btn primair" data-act="akkoord">Akkoord geven</button></div>`;
+    // Geen goedkeurknop: je past het menu aan zoals je wilt. Bestellen doe je bij Boodschappen.
+    const b = bestellingVoor(m.week);
+    const band = b
+      ? `<div class="status-band akkoord"><div><b>${b.status === "binnen" ? "De boodschappen voor deze week zijn binnen." : b.status === "besteld" ? `Boodschappen besteld${b.ah?.bezorgmoment?.van ? `, bezorging ${esc(fmtMoment(b.ah.bezorgmoment))}` : ""}.` : "Boodschappen voor dit menu zijn onderweg naar je AH-mandje."}</b>
+          <div class="sub">Pas je nog iets aan, dan komt alleen wat er extra nodig is op de boodschappenlijst.</div></div><button class="btn klein" data-goto="boodschappen">Naar boodschappen</button></div>`
+      : bestelMenu() === m
+        ? `<div class="status-band"><div><b>Tevreden met het menu?</b><div class="sub">Wissel of schrap wat je anders wilt. Daarna bestel je de boodschappen in één keer.</div></div><button class="btn primair" data-goto="boodschappen">Naar boodschappen</button></div>`
+        : "";
     const vandaag = vandaagISO();
     const kaarten = m.dagen.map((d) => `
       <article class="dag ${d.datum === vandaag ? "vandaag-dag" : ""} ${d.geschrapt ? "geschrapt" : ""}">
@@ -475,40 +694,101 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
         <div class="dag-acties">
           <button class="btn klein" data-act="open-dag" data-datum="${d.datum}">Recept</button>
           ${d.gekookt ? "" : `<button class="btn klein" data-act="wissel" data-datum="${d.datum}">Ander gerecht</button>`}
-          ${d.gekookt ? "" : d.geschrapt ? `<button class="btn klein" data-act="herstel" data-datum="${d.datum}">Terugzetten</button>` : `<button class="btn klein" data-act="schrap" data-datum="${d.datum}">Schrappen</button>`}
+          ${d.gekookt ? "" : d.geschrapt ? `<button class="btn klein" data-act="herstel" data-datum="${d.datum}">Terugzetten</button>` : `<button class="btn klein" data-act="schrap" data-datum="${d.datum}">Geen kookavond</button>`}
         </div>
       </article>`).join("");
-    return `<div class="kop"><div><div class="eyebrow">Weekmenu ${esc(m.week || "")}${m.voorbeeld ? ' · <span class="chip voorbeeld">Voorbeeld</span>' : ""}</div><h1>${ui.week === "volgende" ? "Wat eten we volgende week?" : "Wat eten we deze week?"}</h1>
+    return `<div class="kop"><div><div class="eyebrow">Weekmenu ${esc(weekBereik(m))}${m.voorbeeld ? ' · <span class="chip voorbeeld">Voorbeeld</span>' : ""}</div><h1>${ui.week === "volgende" ? "Wat eten we volgende week?" : "Wat eten we deze week?"}</h1>
       <p class="sub">Geschat ${euro(totaal)} voor ${m.dagen.filter((d) => !d.geschrapt).length} avonden${m.bonusBesparing ? `, waarvan ${euro(m.bonusBesparing)} Bonusvoordeel` : ""}.</p></div>${tabs}</div>
       ${band}<div class="week-grid">${kaarten}</div>`;
   };
 
+  // ---------- Boodschappen ----------
+  const FASEN = ["Lijst", "In AH-mandje", "Besteld", "In de voorraad"];
+  function faseVan(b) {
+    if (!b || b.status === "verlopen") return 0;
+    return { verstuurd: 1, gevuld: 1, besteld: isBezorgd(b) ? 3 : 2, binnen: 4 }[b.status] ?? 0;
+  }
+  function stappenBalk(fase) {
+    return `<ol class="fasen">${FASEN.map((t, i) => `<li class="${i < fase ? "klaar" : i === fase ? "nu" : ""}"><span class="f-bol">${i < fase ? "✓" : i + 1}</span>${t}</li>`).join("")}</ol>`;
+  }
+  function wanneer(iso) { return new Date(iso).toLocaleString("nl-NL", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }); }
+
+  // De kaart met de stand van de laatste bestelling.
+  function bestelKaart(b) {
+    if (!b) return "";
+    const lijstje = (titel, xs) => xs?.length ? `<p class="sub"><b>${titel}:</b> ${xs.map(esc).join(", ")}</p>` : "";
+    const aantal = (b.ah?.items?.length || b.items.length);
+    if (b.status === "verstuurd") return `<div class="bestel-kaart"><div><b>Claude zet ${aantal} artikelen in je AH-mandje</b>
+      <p class="sub">Doorgestuurd op ${esc(wanneer(b.klaarOp))}. Dat gebeurt binnen een uur, als de Claude-app op je computer aan staat.</p></div>
+      <div class="btn-rij"><button class="btn klein" data-act="bestel-intrekken" data-id="${b.id}">Intrekken</button></div></div>`;
+    if (b.status === "gevuld") {
+      const m = b.mandje || {};
+      const uiterlijk = bestelUiterlijk(); const laat = uiterlijk && new Date() >= uiterlijk;
+      const extra = [m.artikelen ? `${m.artikelen} artikelen` : "", m.totaal != null ? `ca. ${euro(m.totaal)}` : "", m.besparing ? `${euro(m.besparing)} Bonusvoordeel` : ""].filter(Boolean).join(" · ");
+      return `<div class="bestel-kaart ${laat ? "let-op" : ""}"><div><b>${laat ? "Nog niet besteld!" : "Je AH-mandje is gevuld"}</b>
+        <p class="sub">${esc(extra)}${extra ? ". " : ""}Kies een bezorgmoment en reken af bij AH. Zodra AH de bestelling heeft, zie je dat hier vanzelf.</p>
+        ${lijstje("Vervangen", (m.vervangingen || []).map((v) => typeof v === "string" ? v : `${v.van} → ${v.naar}`))}
+        ${lijstje("Niet gevonden", (m.nietGevonden || []).map((v) => typeof v === "string" ? v : v.naam))}</div>
+        <div class="btn-rij"><a class="btn accent groot" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Bestelling afronden bij AH</a>
+          <button class="btn klein" data-act="binnen-kies" data-id="${b.id}">Al bezorgd?</button></div></div>`;
+    }
+    if (b.status === "besteld") {
+      const o = b.ah || {};
+      const mist = (o.nietGeleverd || []).map((v) => typeof v === "string" ? v : v.naam);
+      const bron = b.bron === "ah-app" ? "Zelf besteld in de AH-app" : "Besteld bij AH";
+      if (isBezorgd(b)) return `<div class="bestel-kaart"><div><b>Zijn de boodschappen binnen?</b>
+        <p class="sub">${o.status === "bezorgd" ? "AH meldt dat de bestelling is bezorgd." : `Bezorging was ${esc(fmtMoment(o.bezorgmoment))}.`} Eén tik en alles staat in de voorraad.</p>
+        ${lijstje("Niet geleverd volgens AH", mist)}</div>
+        <div class="btn-rij"><button class="btn accent groot" data-act="binnen-alles" data-id="${b.id}">Ja, alles in de voorraad</button>
+          <button class="btn klein" data-act="binnen-kies" data-id="${b.id}">Er ontbrak iets</button></div></div>`;
+      return `<div class="bestel-kaart"><div><b>${bron}</b>
+        <p class="sub">${o.bezorgmoment?.van ? `Bezorging ${esc(fmtMoment(o.bezorgmoment))}.` : "Bezorgmoment nog onbekend."}${o.totaal ? ` Totaal ${euro(o.totaal)}.` : ""} ${aantal} ${aantal === 1 ? "artikel" : "artikelen"}. Die tellen nu als "onderweg", dus ze komen niet nog een keer op de lijst.</p></div>
+        <div class="btn-rij"><a class="btn klein" href="https://www.ah.nl/mijn/bestellingen" target="_blank" rel="noopener">Bekijk bij AH</a></div></div>`;
+    }
+    if (b.status === "binnen") return `<div class="bestel-kaart klaar"><div><b>Laatste boodschappen staan in de voorraad</b>
+      <p class="sub">Binnen op ${esc(wanneer(b.binnenOp))}.</p></div></div>`;
+    return "";
+  }
+
   views.boodschappen = function () {
-    const l = berekenLijst();
-    const regel = (x, waarom) => `<div class="lijst-item"><span>${esc(x.naam)}</span><span class="aantal">${esc(fmtHoeveel(x.hoeveelheid, x.eenheid))}</span><span class="waarom">${esc(waarom)}</span></div>`;
-    const menuKoop = l.menu.koop.map((x) => regel(x, (x.heb ? `Je hebt al ${fmtHoeveel(x.heb, x.eenheid)} · ` : "") + "Voor " + x.bronnen.join(", "))).join("");
-    const schoolKoop = l.school.koop.map((x) => regel(x, (x.heb ? `Je hebt al ${fmtHoeveel(x.heb, x.eenheid)} · ` : "") + x.bronnen.join(", "))).join("");
-    const vaste = l.vaste.map((x) => regel(x, x.reden)).join("");
-    const eigen = l.eigen.map((x) => `<div class="lijst-item"><span>${esc(x.naam)}</span><span class="stepper"><button data-act="eigen-min" data-id="${x.id}" aria-label="Minder">−</button><span class="waarde">${esc(x.aantal)}</span><button data-act="eigen-plus" data-id="${x.id}" aria-label="Meer">+</button></span></div>`).join("");
-    const huis = [...l.menu.huis, ...l.school.huis].map((x) => regel({ ...x, hoeveelheid: x.nodig }, `In huis: ${fmtHoeveel(x.heb, x.eenheid)}`)).join("");
-    const totaal = aantalTeKopen();
-    const sectie = (titel, inhoud, leegTekst) => `<section class="paneel"><h3>${titel}</h3>${inhoud || `<p class="sub">${leegTekst}</p>`}</section>`;
-    const klaar = state.lijst.status === "klaar";
-    return `<div class="kop"><div><div class="eyebrow">Boodschappen</div><h1>${totaal} ${totaal === 1 ? "artikel" : "artikelen"} op de lijst</h1>
-      <p class="sub">Wat je al in huis hebt is er al afgehaald.${bestelMenu().dagen.length ? ` Voor het menu van ${bestelMenu() === state.volgende ? "volgende week" : "deze week"}.` : ""}${bestelMenu().status !== "akkoord" && bestelMenu().dagen.length ? " Dat menu is nog niet goedgekeurd." : ""}</p></div>
+    const l = berekenLijst(); ui.lijst = l.koop;
+    const lopende = lopendeBestellingen();
+    const lopend = lopende.length > 0;
+    const laatste = laatsteBestelling();
+    const b = lopende[0] || (laatste?.status === "binnen" ? laatste : null);
+    const m = bestelMenu();
+    // Rijen per schap
+    let huidig = "", rijen = "";
+    l.koop.forEach((x, i) => {
+      if (x.schap !== huidig) { huidig = x.schap; rijen += `<div class="schap">${esc(x.schap)}</div>`; }
+      const p = product(x.naam), pk = inPakken(x);
+      const extra = [x.waarom.length ? (x.groep === "menu" ? "voor " : "") + x.waarom.join(", ") : "", x.heb > 0 ? `je hebt ${fmtHoeveel(x.heb, x.eenheid)}` : ""].filter(Boolean).join(" · ");
+      const keuze = p?.keuze ? `<span class="li-product">${esc(p.keuze)}${p.bron === "AH" ? " · vorige keer" : ""}</span>` : `<span class="li-product kies">Claude kiest bij AH · tik om zelf te kiezen</span>`;
+      rijen += `<div class="lijst-item"><button class="li-hoofd" data-act="product" data-i="${i}"><span class="li-naam">${esc(cap(x.naam))}</span>${keuze}<span class="waarom">${esc(extra)}</span></button>
+        ${x.eigenId ? `<span class="stepper"><button data-act="eigen-min" data-id="${x.eigenId}" aria-label="Minder">−</button><span class="waarde">${esc(x.hoeveelheid)}</span><button data-act="eigen-plus" data-id="${x.eigenId}" aria-label="Meer">+</button></span>`
+          : `<span class="aantal">${esc(pk.tekst)}</span><button class="btn klein heb-al" data-act="heb-al" data-i="${i}">Heb ik nog</button>`}</div>`;
+    });
+    const huisRegels = l.huis.map((x) => `<div class="lijst-item rustig"><span>${esc(cap(x.naam))}</span><span class="aantal">${esc(fmtHoeveel(x.nodig, x.eenheid))}</span><span class="waarom">in huis: ${esc(fmtHoeveel(x.heb, x.eenheid))}</span></div>`).join("");
+    const wegRegels = l.weg.map((x) => `<div class="lijst-item rustig"><span>${esc(cap(x.naam))}</span><span class="aantal">${esc(fmtHoeveel(x.komt, x.eenheid))}</span><span class="waarom">besteld, komt eraan</span></div>`).join("");
+    const voor = m.dagen?.length ? `het menu van ${esc(weekBereik(m))}` : "deze week";
+    const titel = l.koop.length ? `${l.koop.length} ${l.koop.length === 1 ? "artikel" : "artikelen"} nodig` : "Niets nodig";
+    const geschiedenis = (state.ah?.bestellingen || []).slice(0, 4).map((o) => `<div class="lijst-item rustig"><span>${o.geplaatstOp ? esc(wanneer(o.geplaatstOp)) : "Bestelling"}</span><span class="aantal">${o.totaal ? euro(o.totaal) : ""}</span>
+      <span class="waarom">${o.status === "bezorgd" ? "bezorgd" : "besteld"}${o.bezorgmoment?.van ? ` · bezorging ${esc(fmtMoment(o.bezorgmoment))}` : ""}${o.items?.length ? ` · ${o.items.length} artikelen` : ""}</span></div>`).join("");
+    return `<div class="kop"><div><div class="eyebrow">Boodschappen</div><h1>${titel}</h1>
+      <p class="sub">Voor ${voor}, school en huishouden. Wat in huis is of al besteld is, staat er niet op.</p></div>
       <button class="btn" data-act="kopieer">Lijst kopiëren</button></div>
-      <div class="twee-kol">
-        ${sectie("Voor het weekmenu", menuKoop, "Alles voor het menu is in huis.")}
-        ${sectie("Huishouden", vaste, "Geen huishoudproducten nodig deze week.")}
-        ${sectie("School en opvang", schoolKoop, "Alles voor school is in huis.")}
-        <section class="paneel"><h3>Eigen artikelen</h3>${eigen}
-          <form class="btn-rij" style="margin-top:12px" data-form="eigen"><input class="zoek" style="flex:1;min-width:0" id="eigen-naam" placeholder="Bijv. pindakaas" autocomplete="off" aria-label="Artikel toevoegen"><button class="btn primair">Toevoegen</button></form></section>
+      ${stappenBalk(lopend || (b && !l.koop.length) ? faseVan(b) : 0)}
+      ${lopend ? lopende.map(bestelKaart).join("") : bestelKaart(b)}
+      ${l.koop.length ? `<section class="paneel lijst-paneel">${rijen}</section>` : `<div class="paneel leeg"><h2>${lopend ? "Alles is besteld" : "Alles is in huis"}</h2><p>${lopend ? "Wat je nu nog toevoegt, komt in een extra bestelling." : "Voeg hieronder iets toe als je toch iets nodig hebt."}</p></div>`}
+      <form class="btn-rij toevoegen" data-form="eigen"><input class="zoek" style="flex:1;min-width:0" id="eigen-naam" placeholder="Iets toevoegen, bijv. pindakaas" autocomplete="off" aria-label="Artikel toevoegen"><button class="btn primair">Toevoegen</button></form>
+      <div class="inklap">
+        ${wegRegels ? `<details><summary>Onderweg (${l.weg.length})</summary><div class="paneel">${wegRegels}</div></details>` : ""}
+        ${huisRegels ? `<details><summary>Al in huis (${l.huis.length})</summary><div class="paneel">${huisRegels}</div></details>` : ""}
+        ${geschiedenis ? `<details><summary>Laatste bestellingen bij AH</summary><div class="paneel">${geschiedenis}<p class="sub">Bijgewerkt ${state.ah?.bijgewerkt ? esc(wanneer(state.ah.bijgewerkt)) : "onbekend"}.</p></div></details>` : ""}
       </div>
-      ${huis ? `<details class="in-huis" style="margin-top:22px"><summary class="btn klein" style="list-style:none;display:inline-flex">Al in huis (${l.menu.huis.length + l.school.huis.length})</summary><div class="paneel" style="margin-top:10px">${huis}</div></details>` : ""}
-      ${klaar && state.lijst.mandje ? mandjeBand(state.lijst) : `<div class="klaar-band"><div><b>${klaar ? "Lijst staat klaar voor je AH-mandje" : "Klaar met controleren?"}</b>
-        <p class="sub">${klaar ? (state.lijst.verstuurdOp ? "Doorgestuurd. Claude zet hem in je AH-mandje; afrekenen doe je daarna in de AH-app." : "Nog niet doorgestuurd. Stel bij Instellingen een GitHub-sleutel in, of tik op Lijst kopiëren.") : "Zet de lijst klaar, dan gaat hij naar Claude voor je AH-mandje."}</p></div>
-        <div class="btn-rij">${klaar ? '<button class="btn klein" data-act="lijst-open">Weer aanpassen</button>' : '<button class="btn accent" data-act="lijst-klaar">Lijst klaarzetten</button>'}
-        <a class="btn klein" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Open AH</a></div></div>`}`;
+      ${l.koop.length ? `<div class="klaar-band"><div><b>${lopend ? "Extra bestellen" : "Bestellen bij AH"}</b>
+        <p class="sub">${gh.token() ? `Claude zet ${l.koop.length} artikelen in je AH-mandje. Afrekenen doe je zelf.` : "Stel eerst bij Instellingen, App een GitHub-sleutel in."}</p></div>
+        <div class="btn-rij"><button class="btn accent groot" data-act="bestel" ${gh.token() ? "" : "disabled"}>${lopend ? "Ook bestellen" : "Bestellen"}</button></div></div>` : ""}`;
   };
 
   function fmtMoment(m) {
@@ -523,58 +803,25 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     if (!eerste) return null;
     const d = parseISO(eerste); d.setDate(d.getDate() - 1); return d;
   }
-  function mandjeBand(l) {
-    const m = l.mandje, b = l.bezorging;
-    const euro = (x) => typeof x === "number" ? "€ " + x.toFixed(2).replace(".", ",") : "";
-    const lijstje = (titel, xs) => xs?.length ? `<p class="sub"><b>${titel}:</b> ${xs.map(esc).join(", ")}</p>` : "";
-    if (l.binnenOp) {
-      return `<div class="klaar-band gevuld"><div><b>Boodschappen staan in de voorraad</b>
-        <p class="sub">Bijgewerkt op ${new Date(l.binnenOp).toLocaleString("nl-NL", { weekday: "long", hour: "2-digit", minute: "2-digit" })}.</p></div>
-        <div class="btn-rij"><button class="btn accent" data-act="lijst-open">Nieuwe lijst beginnen</button></div></div>`;
-    }
-    if (b) {
-      const nu = new Date();
-      const isDaar = b.status === "bezorgd" || (b.bezorgmoment?.van && nu >= new Date(b.bezorgmoment.van));
-      const mist = (b.nietGeleverd || []).map((v) => typeof v === "string" ? v : v.naam);
-      if (isDaar) {
-        return `<div class="klaar-band gevuld"><div><b>Zijn de boodschappen binnen?</b>
-          <p class="sub">${b.status === "bezorgd" ? "AH meldt dat de bestelling is bezorgd." : `Bezorging was gepland voor ${esc(fmtMoment(b.bezorgmoment))}.`} Eén tik en alles staat in de voorraad.</p>
-          ${lijstje("Niet geleverd volgens AH", mist)}</div>
-          <div class="btn-rij"><button class="btn accent groot" data-act="binnen-alles">Ja, alles in de voorraad</button>
-          <button class="btn klein" data-act="binnen-kies">Er ontbrak iets</button></div></div>`;
-      }
-      return `<div class="klaar-band gevuld"><div><b>Besteld bij AH</b>
-        <p class="sub">${b.bezorgmoment?.van ? `Bezorging ${esc(fmtMoment(b.bezorgmoment))}.` : "Bezorgmoment nog onbekend."}${b.totaal ? ` Totaal ${euro(b.totaal)}.` : ""} Na de bezorging vraag ik of alles binnen is.</p></div>
-        <div class="btn-rij"><a class="btn klein" href="https://www.ah.nl/mijn/bestellingen" target="_blank" rel="noopener">Bekijk bij AH</a></div></div>`;
-    }
-    const uiterlijk = bestelUiterlijk();
-    const telaat = uiterlijk && new Date() >= uiterlijk;
-    const extra = [
-      m.artikelen ? `${m.artikelen} artikelen` : "",
-      m.totaal != null ? `ca. ${euro(m.totaal)}` : "",
-      m.besparing ? `${euro(m.besparing)} Bonus` : ""
-    ].filter(Boolean).join(" · ");
-    return `<div class="klaar-band gevuld${telaat ? " let-op" : ""}"><div><b>${telaat ? "Nog niet besteld!" : "Je AH-mandje is gevuld"}</b>
-        <p class="sub">${esc(extra)}${extra ? ". " : ""}${telaat ? "De eerste kookdag komt eraan en er is nog geen bestelling bij AH gezien. " : ""}Kies een bezorgmoment en reken af bij AH. Daarna zie ik de bestelling vanzelf.</p>
-        ${lijstje("Vervangen", (m.vervangingen || []).map((v) => typeof v === "string" ? v : `${v.van} → ${v.naar}`))}
-        ${lijstje("Niet gevonden", (m.nietGevonden || []).map((v) => typeof v === "string" ? v : v.naam))}</div>
-        <div class="btn-rij"><a class="btn accent groot" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Bestelling afronden bij AH</a>
-        <button class="btn klein" data-act="binnen-kies">Al binnen? In de voorraad</button>
-        <button class="btn klein" data-act="lijst-open">Nieuwe lijst</button></div></div>`;
-  }
-
 
   views.voorraad = function () {
     const q = norm(ui.zoek);
+    const onderweg = onderwegKaart();
     const items = state.voorraad.items.filter((v) => !q || norm(v.naam).includes(q));
     const groepen = {};
     for (const v of items) (groepen[v.categorie || "Overig"] ||= []).push(v);
     const html = Object.keys(groepen).sort().map((g) => `<div class="groep-kop"><h2>${esc(g)}</h2><span class="tel">${groepen[g].length}</span></div>
-      <div class="rij-lijst">${groepen[g].sort((a, b) => a.naam.localeCompare(b.naam)).map((v) => `
-        <div class="rij"><button class="rij-naam" style="all:unset;cursor:pointer" data-act="voorraad-bewerk" data-id="${v.id}"><div class="rij-naam">${esc(cap(v.naam))}</div>
-          <div class="rij-sub">${v.hoeveelheid <= 0 ? '<span class="chip warn">Op</span>' : "Tik om aan te passen"}</div></button>
-          <div class="stepper"><button data-act="v-min" data-id="${v.id}" aria-label="Minder ${esc(v.naam)}">−</button><span class="waarde">${esc(fmtHoeveel(v.hoeveelheid, v.eenheid))}</span><button data-act="v-plus" data-id="${v.id}" aria-label="Meer ${esc(v.naam)}">+</button></div></div>`).join("")}</div>`).join("");
-    return `<div class="kop"><div><div class="eyebrow">Voorraad</div><h1>Wat hebben we in huis?</h1><p class="sub">Gaat automatisch omlaag als je een gerecht kookt.</p></div>
+      <div class="rij-lijst">${groepen[g].sort((a, b) => a.naam.localeCompare(b.naam)).map((v) => {
+        const [, be] = naarBasis(0, v.eenheid); const komt = onderweg.get(norm(v.naam) + "|" + be) || 0;
+        const p = product(v.naam);
+        const sub = [v.hoeveelheid <= 0 ? '<span class="chip warn">Op</span>' : v.min > 0 && v.hoeveelheid < v.min ? '<span class="chip warn">Bijna op</span>' : "",
+          komt ? `<span class="chip bonus">+${esc(fmtHoeveel(komt, be))} onderweg</span>` : "",
+          v.min > 0 ? `altijd minstens ${esc(fmtHoeveel(v.min, v.eenheid))}` : "", p?.keuze ? esc(p.keuze) : ""].filter(Boolean).join(" · ");
+        return `<div class="rij"><button class="rij-knop" data-act="voorraad-bewerk" data-id="${v.id}"><div class="rij-naam">${esc(cap(v.naam))}</div>
+          <div class="rij-sub">${sub || "Tik om aan te passen"}</div></button>
+          <div class="stepper"><button data-act="v-min" data-id="${v.id}" aria-label="Minder ${esc(v.naam)}">−</button><span class="waarde">${esc(fmtHoeveel(v.hoeveelheid, v.eenheid))}</span><button data-act="v-plus" data-id="${v.id}" aria-label="Meer ${esc(v.naam)}">+</button></div></div>`;
+      }).join("")}</div>`).join("");
+    return `<div class="kop"><div><div class="eyebrow">Voorraad</div><h1>Wat hebben we in huis?</h1><p class="sub">Gaat omhoog als boodschappen binnen zijn en omlaag als je kookt. Zet bij producten die altijd in huis moeten een minimum, dan komen ze vanzelf op de lijst.</p></div>
       <button class="btn primair" data-act="voorraad-nieuw">Product toevoegen</button></div>
       <input class="zoek" id="voorraad-zoek" placeholder="Zoek in de voorraad" value="${esc(ui.zoek)}" autocomplete="off" aria-label="Zoek in de voorraad">
       ${html || '<div class="paneel leeg" style="margin-top:18px"><h2>Niets gevonden</h2><p>Voeg een product toe met de knop hierboven.</p></div>'}`;
@@ -640,7 +887,7 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     document.querySelectorAll(".rail-btn[data-view]").forEach((b) => b.toggleAttribute("aria-current", b.dataset.view === ui.view) || (b.dataset.view === ui.view && b.setAttribute("aria-current", "page")));
     const n = aantalTeKopen();
     const bl = $("#badge-lijst"); bl.hidden = !n; bl.textContent = n;
-    const due = state.vaste.items.filter((v) => dagenTussen(v.laatst, vandaagISO()) >= v.intervalDagen - 3).length;
+    const due = berekenLijst().koop.filter((x) => x.groep === "huishouden").length;
     const bv = $("#badge-vaste"); bv.hidden = !due; bv.textContent = due;
     const zoek = $("#voorraad-zoek");
     if (zoek && document.activeElement?.id !== "voorraad-zoek" && ui.zoekFocus) { zoek.focus(); zoek.setSelectionRange(zoek.value.length, zoek.value.length); }
@@ -655,9 +902,8 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     kook(el) { kook(el.dataset.datum); },
     stap(el) { const d = el.dataset.datum, i = +el.dataset.i; (ui.stappen[d] ||= [])[i] = !ui.stappen[d][i]; render(); },
     "open-dag"(el) { ui.view = "vandaag"; ui.dag = el.dataset.datum; render(); },
-    akkoord() { const m = ui.week === "volgende" && state.volgende ? state.volgende : state.menu; m.status = "akkoord"; m.akkoordOp = new Date().toISOString(); bewaar(); render(); toast("Weekmenu goedgekeurd. De ingrediënten staan op de boodschappenlijst."); },
-    heropen() { const m = ui.week === "volgende" && state.volgende ? state.volgende : state.menu; m.status = "voorstel"; bewaar(); render(); },
-    "naar-volgende"() { ui.week = "volgende"; ga("week"); },
+    kookmodus(el) { ui.kookmodus = { datum: el.dataset.datum, i: 0 }; toonKookmodus(); },
+    timer(el) { startTimer(+el.dataset.min, el.dataset.label); },
     weektab(el) { ui.week = el.dataset.week; render(); },
     "inst-tab"(el) { ui.instTab = el.dataset.tab; render(); },
     async "nu-controleren"() { const nieuw = await sync.haal(); render(); if (!nieuw) toast(sync.status === "aan" ? "Er is nog geen nieuw weekmenu." : `Controleren lukte niet: ${sync.fout}.`); },
@@ -667,8 +913,8 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
       else document.documentElement.requestFullscreen?.().catch(() => toast("Volledig scherm is hier niet beschikbaar."));
     },
-    schrap(el) { const d = dagVan(el.dataset.datum); d.geschrapt = true; bewaar(); render(); toast(`${cap(dagNaam(d.datum))} geschrapt.`, () => { d.geschrapt = false; bewaar(); render(); }); },
-    herstel(el) { dagVan(el.dataset.datum).geschrapt = false; bewaar(); render(); },
+    schrap(el) { const d = dagVan(el.dataset.datum); d.geschrapt = true; menuGewijzigd(d.datum); bewaar(); render(); toast(`${cap(dagNaam(d.datum))}: geen kookavond.`, () => { d.geschrapt = false; bewaar(); render(); }); },
+    herstel(el) { dagVan(el.dataset.datum).geschrapt = false; menuGewijzigd(el.dataset.datum); bewaar(); render(); },
     wissel(el) {
       const d = dagVan(el.dataset.datum);
       const mm = menuVan(d.datum);
@@ -690,10 +936,12 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
           const i = mm.dagen.indexOf(d);
           if (bewaard) state.recepten = state.recepten.filter((x) => x !== r);
           if (!state.recepten.some((x) => norm(x.gerecht) === norm(oud.gerecht)))
-            state.recepten.push({ gerecht: oud.gerecht, tijd: oud.tijd, kosten: oud.kosten, bonus: oud.bonus, kindertip: oud.kindertip, ingredienten: oud.ingredienten, stappen: oud.stappen });
+            state.recepten.push({ gerecht: oud.gerecht, tijd: oud.tijd, kosten: oud.kosten, porties: oud.porties, bonus: oud.bonus, kindertip: oud.kindertip, ingredienten: oud.ingredienten, benodigdheden: oud.benodigdheden, voorbereiding: oud.voorbereiding, stappen: oud.stappen });
           const { waarom, ...rest } = r;
           mm.dagen[i] = { ...JSON.parse(JSON.stringify(rest)), datum: d.datum, geschrapt: false, gekookt: false };
-          bewaar(); sluitSheet(); render(); toast(`${cap(dagNaam(d.datum))}: ${r.gerecht}.`);
+          const al = menuGewijzigd(d.datum);
+          bewaar(); sluitSheet(); render();
+          toast(`${cap(dagNaam(d.datum))}: ${r.gerecht}.${al ? " De boodschappen waren al besteld; wat er extra nodig is, staat op de lijst." : ""}`);
         };
         root.querySelectorAll("[data-kies]").forEach((b) => b.addEventListener("click", () => vervang(opties[+b.dataset.kies], true)));
         const uit = root.querySelector(".idee-uit");
@@ -718,46 +966,75 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     async voorbeeld() { const v = await laadVoorbeeld(); state = compleet({ ...state, menu: v.menu, recepten: v.recepten }); bewaar(); render(); },
     kopieer() {
       const l = berekenLijst();
-      const regels = [...l.menu.koop, ...l.school.koop, ...l.vaste].map((x) => `- ${x.naam}: ${fmtHoeveel(x.hoeveelheid, x.eenheid)}`).concat(l.eigen.map((x) => `- ${x.naam}: ${x.aantal}`));
-      const tekst = "Boodschappen\n" + regels.join("\n");
+      const tekst = "Boodschappen\n" + l.koop.map((x) => `- ${cap(x.naam)}: ${inPakken(x).tekst}${product(x.naam)?.keuze ? ` (${product(x.naam).keuze})` : ""}`).join("\n");
       navigator.clipboard?.writeText(tekst).then(() => toast("Lijst gekopieerd."), () => toast("Kopiëren lukte niet op dit apparaat."));
     },
-    async "lijst-klaar"() {
+    // Eén knop: de lijst gaat naar Claude, die hem in je AH-mandje zet. Wat besteld is, telt daarna als onderweg.
+    async bestel() {
       const l = berekenLijst();
-      const strip = (x) => ({ naam: x.naam, hoeveelheid: x.hoeveelheid, eenheid: x.eenheid });
-      state.lijst.status = "klaar"; state.lijst.klaarOp = new Date().toISOString();
-      state.lijst.bestelling = [...l.menu.koop.map((x) => ({ ...strip(x), groep: "menu" })), ...l.school.koop.map((x) => ({ ...strip(x), groep: "school" })), ...l.vaste.map((x) => ({ ...strip(x), groep: "huishouden" })), ...l.eigen.map((x) => ({ naam: x.naam, hoeveelheid: x.aantal, eenheid: "stuks", groep: "eigen" }))];
-      bewaar(); render();
-      if (!gh.token()) { toast("Lijst staat klaar. Stel bij Instellingen een GitHub-sleutel in om hem automatisch door te sturen."); return; }
-      toast("Lijst wordt doorgestuurd…");
+      if (!l.koop.length) { toast("Er staat niets op de lijst."); return; }
+      if (!gh.token()) { toast("Stel eerst bij Instellingen, App een GitHub-sleutel in."); return; }
+      const items = l.koop.map((x) => ({ naam: x.naam, hoeveelheid: +x.hoeveelheid.toFixed(3), eenheid: x.eenheid, groep: x.groep, schap: x.schap,
+        product: product(x.naam)?.keuze || null, verpakking: product(x.naam)?.verpakking || null, voor: x.waarom.join(", ") }));
+      // Nog niet in het mandje? Dan voegen we samen tot één opdracht.
+      const vorige = state.bestellingen.filter((b) => b.status === "verstuurd");
+      for (const v of vorige) for (const it of v.items) if (!items.some((x) => norm(x.naam) === norm(it.naam))) items.push(it);
+      const b = { id: uid(), week: bestelMenu().week || null, klaarOp: new Date().toISOString(), status: "verstuurd", items };
+      const backup = JSON.stringify({ bestellingen: state.bestellingen, lijst: state.lijst });
+      for (const v of vorige) v.status = "verlopen";
+      state.bestellingen.push(b);
+      state.lijst.items = [];
+      for (const v of state.vaste.items) if (items.some((x) => norm(x.naam) === norm(v.naam))) v.opLijst = false;
+      bewaar(); render(); toast("Wordt doorgestuurd…");
       try {
-        await stuurDoor();
-        state.lijst.verstuurdOp = new Date().toISOString(); bewaar(); render();
-        toast("Doorgestuurd. Claude zet de boodschappen in je AH-mandje.");
-      } catch (e) { toast(`Doorsturen lukte niet: ${e.message}. Probeer het later opnieuw.`); }
+        await stuurDoor(b);
+        toast("Doorgestuurd. Claude zet de boodschappen binnen een uur in je AH-mandje.");
+      } catch (e) {
+        const o = JSON.parse(backup); state.bestellingen = o.bestellingen; state.lijst = o.lijst; bewaar(); render();
+        toast(`Doorsturen lukte niet: ${e.message}. Er is niets veranderd.`);
+      }
     },
-    "lijst-open"() { Object.assign(state.lijst, { status: "open", verstuurdOp: null, mandje: null, bezorging: null, binnenOp: null }); bewaar(); render(); },
-    "binnen-alles"() { boekBinnen(); },
-    "binnen-kies"() {
-      const l = state.lijst;
-      const items = l.bezorging?.items?.length ? l.bezorging.items : (l.bestelling || []);
-      const mist = new Set((l.bezorging?.nietGeleverd || []).map((v) => norm(typeof v === "string" ? v : v.naam)));
+    "bestel-intrekken"(el) {
+      const b = state.bestellingen.find((x) => x.id === el.dataset.id); if (!b) return;
+      b.status = "verlopen"; bewaar(); render();
+      toast("Ingetrokken. De artikelen staan weer op de lijst. Heeft Claude het mandje al gevuld, haal ze dan zelf weg bij AH.");
+    },
+    "binnen-alles"(el) { const b = state.bestellingen.find((x) => x.id === el.dataset.id); if (b) boekBinnen(b); },
+    "binnen-kies"(el) {
+      const b = state.bestellingen.find((x) => x.id === el.dataset.id); if (!b) return;
+      const items = b.ah?.items?.length ? b.ah.items : b.items;
+      const mist = new Set((b.ah?.nietGeleverd || []).map((v) => norm(typeof v === "string" ? v : v.naam)));
       sheet("Wat is er binnengekomen?", `<p class="sub" style="margin-top:0">Haal het vinkje weg bij wat ontbrak.</p>
-        <div class="rij-lijst">${items.map((it, i) => `<label class="rij" style="cursor:pointer"><div><div class="rij-naam">${esc(it.naam)}</div><div class="rij-sub">${esc(fmtHoeveel(it.hoeveelheid, it.eenheid))}</div></div>
+        <div class="rij-lijst">${items.map((it, i) => `<label class="rij" style="cursor:pointer"><div><div class="rij-naam">${esc(cap(it.naam))}</div><div class="rij-sub">${esc(fmtHoeveel(it.hoeveelheid, it.eenheid))}${it.product ? ` · ${esc(it.product)}` : ""}</div></div>
           <input type="checkbox" data-i="${i}" ${mist.has(norm(it.naam)) ? "" : "checked"} style="width:28px;height:28px"></label>`).join("")}</div>
         <div class="btn-rij" style="margin-top:14px"><button class="btn accent" data-binnen>In de voorraad</button><button class="btn" data-act="sluit">Annuleren</button></div>`, (root) => {
         root.querySelector("[data-binnen]").addEventListener("click", () => {
           const overslaan = new Set([...root.querySelectorAll("input[data-i]")].filter((c) => !c.checked).map((c) => norm(items[+c.dataset.i].naam)));
-          sluitSheet(); boekBinnen(overslaan);
+          sluitSheet(); boekBinnen(b, overslaan);
         });
       });
     },
+    // "Heb ik nog": zet het in de voorraad, dan klopt de lijst en de voorraad meteen allebei.
+    "heb-al"(el) {
+      const x = ui.lijst?.[+el.dataset.i]; if (!x) return;
+      const backup = JSON.stringify({ voorraad: state.voorraad, vaste: state.vaste });
+      if (x.vastId) { const v = state.vaste.items.find((i) => i.id === x.vastId); v.laatst = vandaagISO(); v.opLijst = false; }
+      else {
+        const v = vindVoorraad(x.naam, x.eenheid, true);
+        if (v && naarBasis(0, v.eenheid)[1] === x.eenheid) v.hoeveelheid = +(v.hoeveelheid + vanBasis(x.hoeveelheid, v.eenheid)).toFixed(3);
+        else state.voorraad.items.push({ id: uid(), naam: x.naam, hoeveelheid: x.hoeveelheid, eenheid: x.eenheid, categorie: plekVoor(x.schap) });
+      }
+      bewaar(); render();
+      toast(`${cap(x.naam)} staat nu in de voorraad.`, () => { const o = JSON.parse(backup); state.voorraad = o.voorraad; state.vaste = o.vaste; bewaar(); render(); });
+    },
+    product(el) { const x = ui.lijst?.[+el.dataset.i]; if (x) productSheet(x.naam, x); },
     "eigen-plus"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal++; bewaar(); render(); },
     "eigen-min"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal--; if (x.aantal <= 0) state.lijst.items = state.lijst.items.filter((i) => i !== x); bewaar(); render(); },
     "v-plus"(el) { const v = state.voorraad.items.find((i) => i.id === el.dataset.id); v.hoeveelheid = +(v.hoeveelheid + stapVoor(v.eenheid)).toFixed(3); bewaar(); render(); },
     "v-min"(el) { const v = state.voorraad.items.find((i) => i.id === el.dataset.id); v.hoeveelheid = Math.max(0, +(v.hoeveelheid - stapVoor(v.eenheid)).toFixed(3)); bewaar(); render(); },
     "voorraad-nieuw"() { voorraadSheet(null); },
     "voorraad-bewerk"(el) { voorraadSheet(state.voorraad.items.find((i) => i.id === el.dataset.id)); },
+    "naar-volgende"() { ui.week = "volgende"; ga("week"); },
     "vaste-gekocht"(el) { const v = state.vaste.items.find((i) => i.id === el.dataset.id); const oud = { laatst: v.laatst, opLijst: v.opLijst }; v.laatst = vandaagISO(); v.opLijst = false; bewaar(); render(); toast(`${v.naam} afgevinkt.`, () => { Object.assign(v, oud); bewaar(); render(); }); },
     "vaste-lijst"(el) { const v = state.vaste.items.find((i) => i.id === el.dataset.id); v.opLijst = !v.opLijst; bewaar(); render(); },
     snel(el) { state.vaste.items.push({ id: uid(), naam: el.dataset.naam, intervalDagen: +el.dataset.dagen, laatst: vandaagISO(), aantal: 1, opLijst: true }); bewaar(); render(); toast(`${el.dataset.naam} toegevoegd en op de lijst gezet.`); },
@@ -778,10 +1055,11 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     e.preventDefault();
     const f = e.target;
     if (f.dataset.form === "eigen") {
-      const naam = $("#eigen-naam").value.trim(); if (!naam) return;
-      const bestaand = state.lijst.items.find((i) => norm(i.naam) === norm(naam));
-      if (bestaand) bestaand.aantal++; else state.lijst.items.push({ id: uid(), naam: cap(naam), aantal: 1 });
+      const naam = norm($("#eigen-naam").value); if (!naam) return;
+      const bestaand = state.lijst.items.find((i) => norm(i.naam) === naam);
+      if (bestaand) bestaand.aantal++; else state.lijst.items.push({ id: uid(), naam, aantal: 1 });
       bewaar(); render(); $("#eigen-naam")?.focus();
+      if (!product(naam)) toast(`${cap(naam)} staat op de lijst. Tik erop om te kiezen welke precies, of laat Claude kiezen bij AH.`);
     }
     if (f.dataset.form === "wensen") {
       const w = state.wensen;
@@ -815,23 +1093,69 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     if (e.target.id === "voorraad-zoek") { ui.zoek = e.target.value; ui.zoekFocus = true; render(); ui.zoekFocus = false; }
   });
 
+  // Jij hebt het menu aangepast: de zaterdagcontrole overschrijft het dan niet meer.
+  function menuGewijzigd(datum) { const m = menuVan(datum); m.aangepast = true; return !!bestellingVoor(m.week); }
+
   // ---------- Formulieren ----------
   const eenheidOpties = (sel) => EENHEDEN.map((e) => `<option ${e === sel ? "selected" : ""}>${e}</option>`).join("");
   const CATEGORIEEN = ["Groente en fruit", "Koelkast", "Vriezer", "Voorraadkast", "Brood en ontbijt", "School", "Overig"];
   function voorraadSheet(v) {
+    const p = v ? product(v.naam) : null;
     sheet(v ? `${cap(v.naam)} aanpassen` : "Product toevoegen", `<form id="f-voorraad">
-      <div class="veld"><label for="fv-naam">Naam</label><input id="fv-naam" name="naam" required value="${esc(v?.naam || "")}" autocomplete="off"></div>
-      <div class="veld-rij"><div class="veld"><label for="fv-h">Hoeveelheid</label><input id="fv-h" name="h" type="number" step="any" min="0" inputmode="decimal" value="${esc(v?.hoeveelheid ?? 1)}"></div>
+      <div class="veld"><label for="fv-naam">Naam</label><input id="fv-naam" name="naam" required value="${esc(v?.naam || "")}" placeholder="Bijv. kaas" autocomplete="off"></div>
+      <div class="veld-rij"><div class="veld"><label for="fv-h">Hoeveel in huis</label><input id="fv-h" name="h" type="number" step="any" min="0" inputmode="decimal" value="${esc(v?.hoeveelheid ?? 1)}"></div>
         <div class="veld"><label for="fv-e">Eenheid</label><select id="fv-e" name="e">${eenheidOpties(v?.eenheid || "stuks")}</select></div></div>
+      <div class="veld"><label for="fv-min">Altijd minstens in huis (leeg = nee)</label><input id="fv-min" name="min" type="number" step="any" min="0" inputmode="decimal" value="${esc(v?.min || "")}" placeholder="Bijv. 400 bij kaas in gram">
+        <span class="sub">Zakt de voorraad hieronder, dan komt het vanzelf op de boodschappenlijst.</span></div>
       <div class="veld"><label for="fv-c">Plek</label><select id="fv-c" name="c">${CATEGORIEEN.map((c) => `<option ${c === (v?.categorie || "Voorraadkast") ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+      ${v ? `<div class="veld"><label>Welk product bij AH</label><div class="rij"><div><div class="rij-naam">${p?.keuze ? esc(p.keuze) : "Nog niet gekozen"}</div><div class="rij-sub">${p?.bron === "AH" ? "Zo besteld bij AH" : p ? "Zelf gekozen" : "Claude kiest bij AH op basis van wat jullie eerder kochten"}</div></div><button type="button" class="btn klein" id="fv-product">Kiezen</button></div></div>` : ""}
       <div class="btn-rij"><button class="btn primair">Opslaan</button><button type="button" class="btn" data-act="sluit">Annuleren</button>${v ? '<button type="button" class="btn" id="fv-weg" style="margin-left:auto">Verwijderen</button>' : ""}</div></form>`, (root) => {
       root.querySelector("form").addEventListener("submit", (e) => {
         e.preventDefault(); const f = e.target;
-        const data = { naam: norm(f.naam.value), hoeveelheid: Number(f.h.value) || 0, eenheid: f.e.value, categorie: f.c.value };
+        const data = { naam: norm(f.naam.value), hoeveelheid: Number(f.h.value) || 0, eenheid: f.e.value, categorie: f.c.value, min: Number(f.min.value) || 0 };
         if (v) Object.assign(v, data); else state.voorraad.items.push({ id: uid(), ...data });
         bewaar(); sluitSheet(); render();
       });
+      root.querySelector("#fv-product")?.addEventListener("click", () => productSheet(v.naam, { naam: v.naam, hoeveelheid: v.min || v.hoeveelheid, eenheid: v.eenheid }));
       root.querySelector("#fv-weg")?.addEventListener("click", () => { state.voorraad.items = state.voorraad.items.filter((i) => i !== v); bewaar(); sluitSheet(); render(); toast(`${cap(v.naam)} verwijderd.`); });
+    });
+  }
+
+  // Welke kaas precies? Kies zelf, laat Claude opties geven, of laat Claude bij AH kiezen op basis van eerder gekocht.
+  function productSheet(naam, x) {
+    const p = product(naam) || {};
+    const vp = p.verpakking || {};
+    sheet(`Welke ${naam}?`, `<form id="f-product">
+      <p class="sub" style="margin-top:0">Kies je niets, dan pakt Claude bij AH wat jullie eerder kochten en onthoudt de tablet dat.</p>
+      <div class="veld"><label for="fp-keuze">Product</label><input id="fp-keuze" name="keuze" value="${esc(p.keuze || "")}" placeholder="Bijv. AH Jong belegen 48+ plakken" autocomplete="off"></div>
+      <div class="veld-rij"><div class="veld"><label for="fp-h">Verpakking</label><input id="fp-h" name="h" type="number" step="any" min="0" inputmode="decimal" value="${esc(vp.hoeveelheid || "")}" placeholder="Bijv. 400"></div>
+        <div class="veld"><label for="fp-e">Eenheid</label><select id="fp-e" name="e">${eenheidOpties(vp.eenheid || (x?.eenheid === "stuks" ? "stuks" : x?.eenheid) || "g")}</select></div></div>
+      <div class="veld"><label for="fp-c">Schap</label><select id="fp-c" name="c">${WINKEL_VOLGORDE.filter((g) => g !== "Mee naar school" && g !== "Huishouden").map((g) => `<option ${g === (p.categorie || winkelGroep({ naam, eenheid: x?.eenheid })) ? "selected" : ""}>${g}</option>`).join("")}</select></div>
+      ${claude.sleutel() ? `<button type="button" class="btn klein" id="fp-claude">Claude, geef opties</button>` : ""}
+      <div class="product-opties" aria-live="polite"></div>
+      <div class="btn-rij" style="margin-top:14px"><button class="btn primair">Onthouden</button>${p.keuze ? '<button type="button" class="btn" id="fp-wis">Laat Claude kiezen</button>' : ""}<button type="button" class="btn" data-act="sluit">Annuleren</button></div></form>`, (root) => {
+      const f = root.querySelector("form");
+      f.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const keuze = f.keuze.value.trim();
+        state.producten[norm(naam)] = { naam, keuze: keuze || null, verpakking: Number(f.h.value) > 0 ? { hoeveelheid: Number(f.h.value), eenheid: f.e.value } : null, categorie: f.c.value, bron: "jij" };
+        bewaar(); sluitSheet(); render(); toast(keuze ? `Onthouden: ${keuze}.` : "Onthouden.");
+      });
+      root.querySelector("#fp-wis")?.addEventListener("click", () => { delete state.producten[norm(naam)]; bewaar(); sluitSheet(); render(); toast("Claude kiest dit bij AH."); });
+      root.querySelector("#fp-claude")?.addEventListener("click", async (e) => {
+        const knop = e.currentTarget, uit = root.querySelector(".product-opties");
+        knop.disabled = true; uit.innerHTML = '<div class="idee-laden"><span></span><span></span><span></span></div>';
+        try {
+          const opties = await claude.productOpties(naam, x?.waarom?.length ? `voor ${x.waarom.join(", ")}` : "");
+          uit.innerHTML = `<div class="snelkeuze">${opties.map((o, i) => `<button type="button" data-o="${i}"><b>${esc(o.product)}</b> · ${esc(fmtHoeveel(o.hoeveelheid, o.eenheid))}<br><span class="sub">${esc(o.toelichting)}</span></button>`).join("")}</div>`;
+          uit.querySelectorAll("[data-o]").forEach((b) => b.addEventListener("click", () => {
+            const o = opties[+b.dataset.o];
+            f.keuze.value = o.product; f.h.value = o.hoeveelheid; f.e.value = o.eenheid; f.c.value = o.categorie;
+            uit.querySelectorAll("[data-o]").forEach((x) => x.classList.toggle("gekozen", x === b));
+          }));
+        } catch (err) { uit.innerHTML = `<p class="sub">Dat lukte niet: ${esc(err.message)}.</p>`; }
+        finally { knop.disabled = false; }
+      });
     });
   }
   function vasteSheet(v) {
@@ -884,18 +1208,19 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
       if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? "GitHub-sleutel wordt geweigerd" : `GitHub gaf ${res.status}`);
     }
   };
-  async function stuurDoor() {
+  async function stuurDoor(b) {
     const m = bestelMenu();
     await gh.schrijf("data/bestelling.json", {
-      week: m.week || null,
-      klaarOp: state.lijst.klaarOp,
+      week: b.week,
+      klaarOp: b.klaarOp,
       status: "klaar",
-      menu: (m.dagen || []).filter((d) => !d.geschrapt).map((d) => ({ datum: d.datum, gerecht: d.gerecht })),
-      items: state.lijst.bestelling
-    }, `Bestelling ${m.week || ""} klaargezet op de tablet`.trim());
+      menu: (m.dagen || []).filter((d) => !d.geschrapt && !d.gekookt).map((d) => ({ datum: d.datum, gerecht: d.gerecht })),
+      items: b.items
+    }, `Bestelling ${b.week || ""} vanaf de tablet`.replace("  ", " "));
     await gh.schrijf("data/voorraad.json", {
       bijgewerkt: new Date().toISOString(),
-      voorraad: state.voorraad.items.map(({ naam, hoeveelheid, eenheid, categorie }) => ({ naam, hoeveelheid, eenheid, categorie })),
+      voorraad: state.voorraad.items.map(({ naam, hoeveelheid, eenheid, categorie, min }) => ({ naam, hoeveelheid, eenheid, categorie, min: min || 0 })),
+      producten: Object.values(state.producten),
       vaste: state.vaste.items.map(({ naam, intervalDagen, laatst, aantal }) => ({ naam, intervalDagen, laatst, aantal })),
       school: state.school.kinderen.map(({ naam, dagen, items }) => ({ naam, dagen, items }))
     }, "Voorraad bijgewerkt vanaf de tablet");
@@ -942,7 +1267,7 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     return `<div class="twee-kol" style="margin-top:14px">
       <section class="paneel"><h3>Weekmenu van Claude</h3>
         <p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
-        <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
+        <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${bestellingVoor(v.week) ? " en de boodschappen zijn besteld" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
         <button class="btn primair" data-act="nu-controleren">Nu controleren</button></section>
       <section class="paneel"><h3>Doorsturen naar je AH-mandje</h3>
         <form data-form="token">
@@ -1025,7 +1350,8 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     resetIdle();
     await sync.haal();
     setInterval(() => { if (document.visibilityState === "visible") sync.haal(); }, 30 * 60 * 1000);
-    setInterval(() => { if (state.lijst?.verstuurdOp && !state.lijst.binnenOp) { sync.mandje(); render(); } }, 2 * 60 * 1000);
+    // Zolang er een bestelling loopt, vaker kijken (en de "binnen?"-vraag op tijd tonen).
+    setInterval(() => { if (state.bestellingen.some((b) => LOPEND.includes(b.status))) { sync.bestellingen(); render(); } }, 2 * 60 * 1000);
   }
   start();
 
