@@ -409,11 +409,26 @@
   function cap(s) { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); }
 
   // ---------- Renderen ----------
+  let vorigeView = null, binnenTimer = null;
+  function plaatsIndicator() {
+    const knop = document.querySelector(`.rail-btn[data-view="${ui.view}"]`);
+    const ind = $("#rail-indicator"); if (!knop || !ind) return;
+    const smal = getComputedStyle(document.querySelector(".rail")).flexDirection === "row";
+    if (smal) { ind.style.width = knop.offsetWidth + "px"; ind.style.height = knop.offsetHeight + "px"; ind.style.transform = `translateX(${knop.offsetLeft}px)`; }
+    else { ind.style.width = ""; ind.style.height = knop.offsetHeight + "px"; ind.style.transform = `translateY(${knop.offsetTop}px)`; }
+  }
+  window.addEventListener("resize", () => plaatsIndicator());
   function render() {
     const main = $("#main");
     const scroll = main.scrollTop;
     main.innerHTML = views[ui.view]();
     main.scrollTop = scroll;
+    if (ui.view !== vorigeView) {
+      vorigeView = ui.view;
+      main.classList.remove("binnen"); void main.offsetWidth; main.classList.add("binnen");
+      clearTimeout(binnenTimer); binnenTimer = setTimeout(() => main.classList.remove("binnen"), 900);
+      requestAnimationFrame(plaatsIndicator);
+    }
     document.querySelectorAll(".rail-btn[data-view]").forEach((b) => b.toggleAttribute("aria-current", b.dataset.view === ui.view) || (b.dataset.view === ui.view && b.setAttribute("aria-current", "page")));
     const n = aantalTeKopen();
     const bl = $("#badge-lijst"); bl.hidden = !n; bl.textContent = n;
