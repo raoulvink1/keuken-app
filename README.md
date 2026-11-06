@@ -5,12 +5,12 @@ Web-app voor een Android-tablet aan de keukenmuur: weekmenu op basis van de AH B
 ## Wat er nu in zit (stap 1)
 
 - **Vandaag**: het gerecht van de dag met ingrediënten en stappen. "Ik ga dit koken" haalt de ingrediënten automatisch uit de voorraad (met ongedaan maken).
-- **Weekmenu**: voorstel voor 7 dagen, gerechten wisselen of schrappen, akkoord geven.
+- **Weekmenu**: menu voor 7 dagen, gerechten wisselen (met ideeën van Claude) of schrappen. Geen goedkeuren: wat er staat, komt op de boodschappenlijst.
 - **Boodschappen**: menu + school + vaste producten + eigen artikelen, min wat er in huis is. "Lijst klaarzetten" maakt de bestelling klaar voor het AH-mandje.
 - **Voorraad**, **Huishouden** (producten met een interval, zoals vaatwastabletten) en **School** (per kind per dag).
 - **Klok-screensaver** die langzaam verschuift (tegen inbranden) en 's nachts dimt.
 
-Gegevens (voorraad, akkoord, lijst) staan lokaal op de tablet. De voorbeeldweek staat in `data/voorbeeld.json`.
+Gegevens (voorraad, menu, bestellingen, productkeuzes) staan lokaal op de tablet. De voorbeeldweek staat in `data/voorbeeld.json`.
 
 ## Weekmenu van Claude
 
