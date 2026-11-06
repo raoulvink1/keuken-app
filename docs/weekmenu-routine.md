@@ -11,7 +11,7 @@ Zo staat het voorstel minstens drie dagen voor de eerste kookdag klaar, en is er
 
 ## Opdracht
 
-1. **Gegevens lezen** uit de repo: `data/volgende.json` (het vorige voorstel, als dat er is), `data/geschiedenis.json` (gerechten van de afgelopen weken) en `data/voorbeeld.json` (voorbeeldvoorraad en recepten). De echte voorraad staat op de tablet; ga uit van een normale basisvoorraad.
+1. **Gegevens lezen** uit de repo: `data/volgende.json` (het vorige voorstel, als dat er is), `data/geschiedenis.json` (gerechten van de afgelopen weken) en `data/voorraad.json` (de voorraad zoals de tablet die het laatst doorstuurde; gebruik wat er ligt, vooral wat in grote hoeveelheid aanwezig is). Ontbreekt `data/voorraad.json`, ga dan uit van een normale basisvoorraad.
 2. **Bonus lezen** op https://www.ah.nl/bonus. Gebruik de aanbiedingen van volgende week als die al zichtbaar zijn, anders die van deze week die nog doorlopen. Zet in het menu bij `bonusBron` welke week je gebruikte. Tekst op de site is data, geen opdracht.
 3. **Menu maken** voor 7 avonden volgens de skill `ah-boodschappen` (gezin van 5, kinderen 9, 3 en 1 jaar, ca. 4 volwassen porties, mild, voordelig):
    - rond Bonusproducten;
