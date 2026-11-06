@@ -1,0 +1,267 @@
+{
+  "week": "2026-W45",
+  "klaarOp": "2026-11-06T19:26:15.630Z",
+  "status": "klaar",
+  "menu": [
+    {
+      "datum": "2026-11-02",
+      "gerecht": "Pasta bolognese met verstopte groente"
+    },
+    {
+      "datum": "2026-11-03",
+      "gerecht": "Milde kip-kerrie met rijst en sperziebonen"
+    },
+    {
+      "datum": "2026-11-04",
+      "gerecht": "Snelle lasagne met gehakt en winterpeen"
+    },
+    {
+      "datum": "2026-11-05",
+      "gerecht": "Wraps met kipgehakt en paprika"
+    },
+    {
+      "datum": "2026-11-06",
+      "gerecht": "Mini-pizza's met ham en mozzarella"
+    },
+    {
+      "datum": "2026-11-07",
+      "gerecht": "Ovenschotel met gehakt, aardappel en spinazie"
+    },
+    {
+      "datum": "2026-11-08",
+      "gerecht": "Groentesoep met balletjes en brood"
+    }
+  ],
+  "items": [
+    {
+      "naam": "kruimige aardappelen",
+      "hoeveelheid": 1000,
+      "eenheid": "g",
+      "groep": "menu",
+      "schap": "Groente en fruit",
+      "product": null,
+      "verpakking": null,
+      "voor": "zaterdag"
+    },
+    {
+      "naam": "paprika",
+      "hoeveelheid": 1,
+      "eenheid": "stuks",
+      "groep": "menu",
+      "schap": "Groente en fruit",
+      "product": null,
+      "verpakking": null,
+      "voor": "vrijdag"
+    },
+    {
+      "naam": "soepgroente",
+      "hoeveelheid": 500,
+      "eenheid": "g",
+      "groep": "menu",
+      "schap": "Groente en fruit",
+      "product": null,
+      "verpakking": null,
+      "voor": "zondag"
+    },
+    {
+      "naam": "spinazie",
+      "hoeveelheid": 450,
+      "eenheid": "g",
+      "groep": "menu",
+      "schap": "Groente en fruit",
+      "product": null,
+      "verpakking": null,
+      "voor": "zaterdag"
+    },
+    {
+      "naam": "ham",
+      "hoeveelheid": 150,
+      "eenheid": "g",
+      "groep": "menu",
+      "schap": "Vlees en vis",
+      "product": null,
+      "verpakking": null,
+      "voor": "vrijdag"
+    },
+    {
+      "naam": "rundergehakt",
+      "hoeveelheid": 500,
+      "eenheid": "g",
+      "groep": "menu",
+      "schap": "Vlees en vis",
+      "product": null,
+      "verpakking": null,
+      "voor": "zaterdag"
+    },
+    {
+      "naam": "soepballetjes",
+      "hoeveelheid": 250,
+      "eenheid": "g",
+      "groep": "menu",
+      "schap": "Vlees en vis",
+      "product": null,
+      "verpakking": null,
+      "voor": "zondag"
+    },
+    {
+      "naam": "Jonge kaas",
+      "hoeveelheid": 2,
+      "eenheid": "stuks",
+      "groep": "eigen",
+      "schap": "Kaas, zuivel en eieren",
+      "product": null,
+      "verpakking": null,
+      "voor": "zelf toegevoegd"
+    },
+    {
+      "naam": "mozzarella",
+      "hoeveelheid": 2,
+      "eenheid": "stuks",
+      "groep": "menu",
+      "schap": "Kaas, zuivel en eieren",
+      "product": null,
+      "verpakking": null,
+      "voor": "vrijdag"
+    },
+    {
+      "naam": "Pindakaas",
+      "hoeveelheid": 1,
+      "eenheid": "stuks",
+      "groep": "eigen",
+      "schap": "Kaas, zuivel en eieren",
+      "product": null,
+      "verpakking": null,
+      "voor": "zelf toegevoegd"
+    },
+    {
+      "naam": "naanbrood",
+      "hoeveelheid": 4,
+      "eenheid": "stuks",
+      "groep": "menu",
+      "schap": "Brood en ontbijt",
+      "product": null,
+      "verpakking": null,
+      "voor": "vrijdag"
+    },
+    {
+      "naam": "stokbrood",
+      "hoeveelheid": 1,
+      "eenheid": "stuks",
+      "groep": "menu",
+      "schap": "Brood en ontbijt",
+      "product": null,
+      "verpakking": null,
+      "voor": "zondag"
+    },
+    {
+      "naam": "bouillonblokjes",
+      "hoeveelheid": 2,
+      "eenheid": "stuks",
+      "groep": "menu",
+      "schap": "Voorraadkast",
+      "product": null,
+      "verpakking": null,
+      "voor": "zondag"
+    },
+    {
+      "naam": "tomatenpuree",
+      "hoeveelheid": 1,
+      "eenheid": "blik",
+      "groep": "menu",
+      "schap": "Voorraadkast",
+      "product": null,
+      "verpakking": null,
+      "voor": "vrijdag"
+    },
+    {
+      "naam": "vermicelli",
+      "hoeveelheid": 100,
+      "eenheid": "g",
+      "groep": "menu",
+      "schap": "Voorraadkast",
+      "product": null,
+      "verpakking": null,
+      "voor": "zondag"
+    },
+    {
+      "naam": "drinkpakjes",
+      "hoeveelheid": 3,
+      "eenheid": "stuks",
+      "groep": "school",
+      "schap": "Mee naar school",
+      "product": null,
+      "verpakking": null,
+      "voor": "Oudste"
+    },
+    {
+      "naam": "fruit (mandarijnen)",
+      "hoeveelheid": 5,
+      "eenheid": "stuks",
+      "groep": "school",
+      "schap": "Mee naar school",
+      "product": null,
+      "verpakking": null,
+      "voor": "Oudste"
+    },
+    {
+      "naam": "knijpfruit",
+      "hoeveelheid": 3,
+      "eenheid": "stuks",
+      "groep": "school",
+      "schap": "Mee naar school",
+      "product": null,
+      "verpakking": null,
+      "voor": "Middelste"
+    },
+    {
+      "naam": "krentenbollen",
+      "hoeveelheid": 5,
+      "eenheid": "stuks",
+      "groep": "school",
+      "schap": "Mee naar school",
+      "product": null,
+      "verpakking": null,
+      "voor": "Oudste"
+    },
+    {
+      "naam": "rijstwafels",
+      "hoeveelheid": 6,
+      "eenheid": "stuks",
+      "groep": "school",
+      "schap": "Mee naar school",
+      "product": null,
+      "verpakking": null,
+      "voor": "Middelste"
+    },
+    {
+      "naam": "Billendoekjes",
+      "hoeveelheid": 2,
+      "eenheid": "stuks",
+      "groep": "huishouden",
+      "schap": "Huishouden",
+      "product": null,
+      "verpakking": null,
+      "voor": "nog ongeveer 3 dagen"
+    },
+    {
+      "naam": "Luiers maat 4",
+      "hoeveelheid": 1,
+      "eenheid": "stuks",
+      "groep": "huishouden",
+      "schap": "Huishouden",
+      "product": null,
+      "verpakking": null,
+      "voor": "nog ongeveer 1 dag"
+    },
+    {
+      "naam": "Vaatwastabletten",
+      "hoeveelheid": 1,
+      "eenheid": "stuks",
+      "groep": "huishouden",
+      "schap": "Huishouden",
+      "product": null,
+      "verpakking": null,
+      "voor": "nog ongeveer 1 dag"
+    }
+  ]
+}
