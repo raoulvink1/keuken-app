@@ -351,7 +351,7 @@
       </div>
       ${huis ? `<details class="in-huis" style="margin-top:22px"><summary class="btn klein" style="list-style:none;display:inline-flex">Al in huis (${l.menu.huis.length + l.school.huis.length})</summary><div class="paneel" style="margin-top:10px">${huis}</div></details>` : ""}
       <div class="klaar-band"><div><b>${klaar ? "Lijst staat klaar voor je AH-mandje" : "Klaar met controleren?"}</b>
-        <p class="sub">${klaar ? "Vraag Claude om hem in je AH-mandje te zetten. Afrekenen doe je daarna in de AH-app." : "Zet de lijst klaar, dan gaat hij in de volgende stap automatisch naar je AH-mandje."}</p></div>
+        <p class="sub">${klaar ? (state.lijst.verstuurdOp ? "Doorgestuurd. Claude zet hem in je AH-mandje; afrekenen doe je daarna in de AH-app." : "Nog niet doorgestuurd. Stel bij Bijwerken een GitHub-sleutel in, of tik op Lijst kopiëren.") : "Zet de lijst klaar, dan gaat hij naar Claude voor je AH-mandje."}</p></div>
         <div class="btn-rij">${klaar ? '<button class="btn klein" data-act="lijst-open">Weer aanpassen</button>' : '<button class="btn accent" data-act="lijst-klaar">Lijst klaarzetten</button>'}
         <a class="btn klein" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Open AH</a></div></div>`;
   };
@@ -465,13 +465,21 @@
       const tekst = "Boodschappen\n" + regels.join("\n");
       navigator.clipboard?.writeText(tekst).then(() => toast("Lijst gekopieerd."), () => toast("Kopiëren lukte niet op dit apparaat."));
     },
-    "lijst-klaar"() {
+    async "lijst-klaar"() {
       const l = berekenLijst();
+      const strip = (x) => ({ naam: x.naam, hoeveelheid: x.hoeveelheid, eenheid: x.eenheid });
       state.lijst.status = "klaar"; state.lijst.klaarOp = new Date().toISOString();
-      state.lijst.bestelling = [...l.menu.koop.map((x) => ({ ...x, groep: "menu" })), ...l.school.koop.map((x) => ({ ...x, groep: "school" })), ...l.vaste.map((x) => ({ ...x, groep: "huishouden" })), ...l.eigen.map((x) => ({ naam: x.naam, hoeveelheid: x.aantal, eenheid: "stuks", groep: "eigen" }))];
-      bewaar(); render(); toast("Lijst staat klaar voor je AH-mandje.");
+      state.lijst.bestelling = [...l.menu.koop.map((x) => ({ ...strip(x), groep: "menu" })), ...l.school.koop.map((x) => ({ ...strip(x), groep: "school" })), ...l.vaste.map((x) => ({ ...strip(x), groep: "huishouden" })), ...l.eigen.map((x) => ({ naam: x.naam, hoeveelheid: x.aantal, eenheid: "stuks", groep: "eigen" }))];
+      bewaar(); render();
+      if (!gh.token()) { toast("Lijst staat klaar. Stel bij Bijwerken een GitHub-sleutel in om hem automatisch door te sturen."); return; }
+      toast("Lijst wordt doorgestuurd…");
+      try {
+        await stuurDoor();
+        state.lijst.verstuurdOp = new Date().toISOString(); bewaar(); render();
+        toast("Doorgestuurd. Claude zet de boodschappen in je AH-mandje.");
+      } catch (e) { toast(`Doorsturen lukte niet: ${e.message}. Probeer het later opnieuw.`); }
     },
-    "lijst-open"() { state.lijst.status = "open"; bewaar(); render(); },
+    "lijst-open"() { state.lijst.status = "open"; state.lijst.verstuurdOp = null; bewaar(); render(); },
     "eigen-plus"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal++; bewaar(); render(); },
     "eigen-min"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal--; if (x.aantal <= 0) state.lijst.items = state.lijst.items.filter((i) => i !== x); bewaar(); render(); },
     "v-plus"(el) { const v = state.voorraad.items.find((i) => i.id === el.dataset.id); v.hoeveelheid = +(v.hoeveelheid + stapVoor(v.eenheid)).toFixed(3); bewaar(); render(); },
@@ -562,12 +570,61 @@
     });
   }
 
+  // ---------- Doorsturen naar de repo ----------
+  // Met een GitHub-sleutel die alleen deze repo mag wijzigen zet de tablet de bestelling
+  // en de voorraad in de repo, zodat Claude het AH-mandje kan vullen en het menu kan afstemmen.
+  const GH_SLEUTEL = "keukenbord.ghtoken";
+  const REPO = "raoulvink1/keuken-app";
+  const gh = {
+    token() { try { return localStorage.getItem(GH_SLEUTEL) || ""; } catch { return ""; } },
+    async schrijf(pad, obj, bericht) {
+      const t = this.token(); if (!t) throw new Error("geen GitHub-sleutel");
+      const url = `https://api.github.com/repos/${REPO}/contents/${pad}`;
+      const kop = { Authorization: `Bearer ${t}`, Accept: "application/vnd.github+json" };
+      let sha;
+      const oud = await fetch(`${url}?ref=main`, { headers: kop, cache: "no-store" });
+      if (oud.ok) sha = (await oud.json()).sha;
+      else if (oud.status === 401 || oud.status === 403) throw new Error("GitHub-sleutel wordt geweigerd");
+      const inhoud = btoa(unescape(encodeURIComponent(JSON.stringify(obj, null, 2) + "\n")));
+      const res = await fetch(url, { method: "PUT", headers: kop, body: JSON.stringify({ message: bericht, content: inhoud, sha, branch: "main" }) });
+      if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? "GitHub-sleutel wordt geweigerd" : `GitHub gaf ${res.status}`);
+    }
+  };
+  async function stuurDoor() {
+    const m = bestelMenu();
+    await gh.schrijf("data/bestelling.json", {
+      week: m.week || null,
+      klaarOp: state.lijst.klaarOp,
+      status: "klaar",
+      menu: (m.dagen || []).filter((d) => !d.geschrapt).map((d) => ({ datum: d.datum, gerecht: d.gerecht })),
+      items: state.lijst.bestelling
+    }, `Bestelling ${m.week || ""} klaargezet op de tablet`.trim());
+    await gh.schrijf("data/voorraad.json", {
+      bijgewerkt: new Date().toISOString(),
+      voorraad: state.voorraad.items.map(({ naam, hoeveelheid, eenheid, categorie }) => ({ naam, hoeveelheid, eenheid, categorie })),
+      vaste: state.vaste.items.map(({ naam, intervalDagen, laatst, aantal }) => ({ naam, intervalDagen, laatst, aantal })),
+      school: state.school.kinderen.map(({ naam, dagen, items }) => ({ naam, dagen, items }))
+    }, "Voorraad bijgewerkt vanaf de tablet");
+  }
+
   function instellingenSheet() {
     const status = sync.status === "aan" ? `Laatst gecontroleerd om ${sync.laatst.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.` : sync.status === "fout" ? `Controleren lukte niet: ${esc(sync.fout)}.` : "Nog niet gecontroleerd.";
     const v = state.volgende;
     sheet("Weekmenu ophalen", `<p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
       <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
-      <div class="btn-rij" style="margin-top:14px"><button class="btn primair" id="fi-nu">Nu controleren</button><button type="button" class="btn" data-act="sluit">Sluiten</button></div>`, (root) => {
+      <div class="btn-rij" style="margin-top:14px"><button class="btn primair" id="fi-nu">Nu controleren</button><button type="button" class="btn" data-act="sluit">Sluiten</button></div>
+      <form id="fi-gh" style="margin-top:24px;padding-top:18px;border-top:1px solid var(--line)">
+        <div class="veld"><label for="fi-token">GitHub-sleutel om de lijst door te sturen</label>
+          <input id="fi-token" name="token" type="password" autocomplete="off" placeholder="${gh.token() ? "Ingesteld (laat leeg om te houden)" : "github_pat_…"}"></div>
+        <p class="sub">Een sleutel die alleen <b>keuken-app</b> mag wijzigen. Hij blijft op deze tablet.</p>
+        <div class="btn-rij"><button class="btn">Sleutel opslaan</button>${gh.token() ? '<button type="button" class="btn" id="fi-wis">Sleutel wissen</button>' : ""}</div>
+      </form>`, (root) => {
+      root.querySelector("#fi-gh").addEventListener("submit", (e) => {
+        e.preventDefault(); const v = e.target.token.value.trim();
+        if (v) { try { localStorage.setItem(GH_SLEUTEL, v); } catch {} }
+        sluitSheet(); toast(v ? "GitHub-sleutel opgeslagen." : "Niets gewijzigd.");
+      });
+      root.querySelector("#fi-wis")?.addEventListener("click", () => { try { localStorage.removeItem(GH_SLEUTEL); } catch {} sluitSheet(); toast("GitHub-sleutel gewist."); });
       root.querySelector("#fi-nu").addEventListener("click", async () => {
         const nieuw = await sync.haal();
         sluitSheet();

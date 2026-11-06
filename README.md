@@ -16,6 +16,10 @@ Gegevens (voorraad, akkoord, lijst) staan lokaal op de tablet. De voorbeeldweek 
 
 Elke donderdag om 07:00 zet een geplande Claude-routine het menu voor volgende week in `data/volgende.json` (zaterdag 08:00 volgt een controle). De tablet kijkt elk half uur of er een nieuw menu is, toont dan een melding en een tab "Volgende week", en schuift het menu op maandag door. De opdracht voor de routine staat in `docs/weekmenu-routine.md`.
 
+## Naar het AH-mandje
+
+Met **Lijst klaarzetten** stuurt de tablet de bestelling en voorraad naar de repo (eenmalig een GitHub-sleutel instellen). Claude vult daarna je AH-mandje in de desktop-app. Zie `docs/mandje-vullen.md`.
+
 ## Op de tablet zetten
 
 1. Zet GitHub Pages aan voor deze repo (Settings → Pages → branch `main`, map `/`).
@@ -31,4 +35,4 @@ en open http://localhost:8000.
 
 ## Volgende stappen
 
-- Stap 3: goedgekeurde lijst automatisch in het AH-mandje; afrekenen in de AH-app.
+
