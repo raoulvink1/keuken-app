@@ -149,16 +149,33 @@
       } catch (e) { this.status = "fout"; this.fout = e.message; return false; }
     },
     // Na het doorsturen: kijk of Claude het AH-mandje al gevuld heeft (data/mandje.json).
+    // Daarna: is de bestelling echt geplaatst bij AH? (data/bezorging.json, geschreven door de desktop-taak)
+    async bezorging() {
+      const l = state.lijst;
+      if (!l?.mandje || l.binnenOp) return false;
+      try {
+        const res = await fetch("data/bezorging.json", { cache: "no-store" });
+        if (!res.ok) return false;
+        const b = await res.json();
+        if (b?.klaarOp !== l.klaarOp || !["besteld", "bezorgd"].includes(b.status)) return false;
+        if (JSON.stringify(b) === JSON.stringify(l.bezorging)) return false;
+        const nieuw = !l.bezorging;
+        l.bezorging = b; bewaar(); render();
+        if (nieuw) toast(`Besteld bij AH${b.bezorgmoment?.van ? `, bezorging ${fmtMoment(b.bezorgmoment)}` : ""}.`);
+        return true;
+      } catch { return false; }
+    },
     async mandje() {
       const l = state.lijst;
-      if (!l?.verstuurdOp || l.mandje) return false;
+      if (l?.mandje) return this.bezorging();
+      if (!l?.verstuurdOp) return false;
       try {
         const res = await fetch("data/mandje.json", { cache: "no-store" });
         if (!res.ok) return false;
         const m = await res.json();
         if (m?.klaarOp !== l.klaarOp || m.status !== "gevuld") return false;
         l.mandje = m; bewaar(); render();
-        toast("Je AH-mandje is gevuld. Rond de bestelling af bij Boodschappen.");
+        if (!(await this.bezorging())) toast("Je AH-mandje is gevuld. Rond de bestelling af bij Boodschappen.");
         return true;
       } catch { return false; }
     },
@@ -266,6 +283,39 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     return { status: v.hoeveelheid >= ing.hoeveelheid ? "ja" : v.hoeveelheid > 0 ? "deels" : "nee", v };
   }
 
+  // Zet de bezorgde boodschappen in de voorraad. Gebruikt de echte hoeveelheden uit bezorging.json als die er zijn.
+  function boekBinnen(overslaan = new Set()) {
+    const l = state.lijst;
+    const backup = JSON.stringify({ voorraad: state.voorraad, vaste: state.vaste, lijst: l });
+    const items = l.bezorging?.items?.length ? l.bezorging.items : (l.bestelling || []);
+    const mist = new Set((l.bezorging?.nietGeleverd || []).map((v) => norm(typeof v === "string" ? v : v.naam)));
+    const naarBasis = (h, e) => e === "kg" ? [h * 1000, "g"] : e === "l" ? [h * 1000, "ml"] : [h, e];
+    let n = 0;
+    for (const it of items) {
+      if (overslaan.has(norm(it.naam)) || mist.has(norm(it.naam))) continue;
+      if (it.groep === "huishouden") {
+        const v = state.vaste.items.find((x) => norm(x.naam) === norm(it.naam));
+        if (v) { v.laatst = vandaagISO(); v.opLijst = false; n++; }
+        continue;
+      }
+      if (BASIS.has(norm(it.naam))) continue;
+      const v = vindVoorraad(it.naam, it.eenheid);
+      const [h, e] = naarBasis(Number(it.hoeveelheid) || 0, it.eenheid);
+      if (v) {
+        const ve = naarBasis(0, v.eenheid)[1];
+        if (ve === e) { v.hoeveelheid = +(v.hoeveelheid + (v.eenheid === "kg" || v.eenheid === "l" ? h / 1000 : h)).toFixed(3); n++; continue; }
+      }
+      state.voorraad.items.push({ id: uid(), naam: cap(it.naam), hoeveelheid: h, eenheid: e, categorie: it.groep === "school" ? "School" : "Boodschappen" });
+      n++;
+    }
+    l.binnenOp = new Date().toISOString();
+    bewaar(); render();
+    toast(`${n} artikelen in de voorraad gezet.`, () => {
+      const b = JSON.parse(backup);
+      state.voorraad = b.voorraad; state.vaste = b.vaste; state.lijst = b.lijst; bewaar(); render();
+    });
+  }
+
   function kook(datum) {
     const dag = dagVan(datum);
     if (!dag || dag.gekookt) return;
@@ -352,7 +402,14 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
       </div>`;
     const voorstel = state.volgende?.dagen?.length && state.volgende.status !== "akkoord"
       ? `<div class="status-band"><div><b>Het menu voor volgende week staat klaar.</b><div class="sub">Bekijk het en geef akkoord${state.volgende.akkoordVoor ? ` vóór ${esc(state.volgende.akkoordVoor)}` : ""}, dan kan de bestelling op tijd de deur uit.</div></div><button class="btn primair" data-act="naar-volgende">Bekijken</button></div>` : "";
-    const kop = `${voorstel}<div class="kop"><div><div class="eyebrow">${esc(cap(dagNaam(iso)))} ${esc(korteDatum(iso))}</div><h1>${esc(titel)}</h1></div>${nav}</div>`;
+    const l = state.lijst;
+    const uiterlijk = bestelUiterlijk();
+    const bestelStatus = l.binnenOp ? ""
+      : l.bezorging && (l.bezorging.status === "bezorgd" || (l.bezorging.bezorgmoment?.van && new Date() >= new Date(l.bezorging.bezorgmoment.van)))
+        ? `<div class="status-band"><div><b>Zijn de boodschappen binnen?</b><div class="sub">Zet ze met één tik in de voorraad.</div></div><button class="btn primair" data-goto="boodschappen">Naar boodschappen</button></div>`
+      : !l.bezorging && l.mandje && uiterlijk && new Date() >= uiterlijk
+        ? `<div class="status-band let-op"><div><b>Nog niet besteld bij AH</b><div class="sub">Je mandje is gevuld, maar er is nog geen bestelling gezien en de eerste kookdag komt eraan.</div></div><a class="btn primair" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Afronden bij AH</a></div>` : "";
+    const kop = `${bestelStatus}${voorstel}<div class="kop"><div><div class="eyebrow">${esc(cap(dagNaam(iso)))} ${esc(korteDatum(iso))}</div><h1>${esc(titel)}</h1></div>${nav}</div>`;
     if (!dag) {
       return kop + `<div class="paneel leeg"><h2>Nog geen gerecht voor deze dag</h2>
         <p>Zodra het weekmenu klaarstaat zie je hier het recept van de dag.</p>
@@ -448,27 +505,64 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
           <form class="btn-rij" style="margin-top:12px" data-form="eigen"><input class="zoek" style="flex:1;min-width:0" id="eigen-naam" placeholder="Bijv. pindakaas" autocomplete="off" aria-label="Artikel toevoegen"><button class="btn primair">Toevoegen</button></form></section>
       </div>
       ${huis ? `<details class="in-huis" style="margin-top:22px"><summary class="btn klein" style="list-style:none;display:inline-flex">Al in huis (${l.menu.huis.length + l.school.huis.length})</summary><div class="paneel" style="margin-top:10px">${huis}</div></details>` : ""}
-      ${klaar && state.lijst.mandje ? mandjeBand(state.lijst.mandje) : `<div class="klaar-band"><div><b>${klaar ? "Lijst staat klaar voor je AH-mandje" : "Klaar met controleren?"}</b>
+      ${klaar && state.lijst.mandje ? mandjeBand(state.lijst) : `<div class="klaar-band"><div><b>${klaar ? "Lijst staat klaar voor je AH-mandje" : "Klaar met controleren?"}</b>
         <p class="sub">${klaar ? (state.lijst.verstuurdOp ? "Doorgestuurd. Claude zet hem in je AH-mandje; afrekenen doe je daarna in de AH-app." : "Nog niet doorgestuurd. Stel bij Instellingen een GitHub-sleutel in, of tik op Lijst kopiëren.") : "Zet de lijst klaar, dan gaat hij naar Claude voor je AH-mandje."}</p></div>
         <div class="btn-rij">${klaar ? '<button class="btn klein" data-act="lijst-open">Weer aanpassen</button>' : '<button class="btn accent" data-act="lijst-klaar">Lijst klaarzetten</button>'}
         <a class="btn klein" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Open AH</a></div></div>`}`;
   };
 
-  function mandjeBand(m) {
+  function fmtMoment(m) {
+    if (!m?.van) return "";
+    const van = new Date(m.van), tot = m.tot ? new Date(m.tot) : null;
+    const tijd = (d) => d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+    return `${van.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" })} ${tijd(van)}${tot ? `–${tijd(tot)}` : ""}`;
+  }
+  // Uiterlijk de dag vóór de eerste kookdag moet er besteld zijn.
+  function bestelUiterlijk() {
+    const eerste = bestelMenu()?.dagen?.find((d) => !d.geschrapt)?.datum;
+    if (!eerste) return null;
+    const d = parseISO(eerste); d.setDate(d.getDate() - 1); return d;
+  }
+  function mandjeBand(l) {
+    const m = l.mandje, b = l.bezorging;
     const euro = (x) => typeof x === "number" ? "€ " + x.toFixed(2).replace(".", ",") : "";
+    const lijstje = (titel, xs) => xs?.length ? `<p class="sub"><b>${titel}:</b> ${xs.map(esc).join(", ")}</p>` : "";
+    if (l.binnenOp) {
+      return `<div class="klaar-band gevuld"><div><b>Boodschappen staan in de voorraad</b>
+        <p class="sub">Bijgewerkt op ${new Date(l.binnenOp).toLocaleString("nl-NL", { weekday: "long", hour: "2-digit", minute: "2-digit" })}.</p></div>
+        <div class="btn-rij"><button class="btn accent" data-act="lijst-open">Nieuwe lijst beginnen</button></div></div>`;
+    }
+    if (b) {
+      const nu = new Date();
+      const isDaar = b.status === "bezorgd" || (b.bezorgmoment?.van && nu >= new Date(b.bezorgmoment.van));
+      const mist = (b.nietGeleverd || []).map((v) => typeof v === "string" ? v : v.naam);
+      if (isDaar) {
+        return `<div class="klaar-band gevuld"><div><b>Zijn de boodschappen binnen?</b>
+          <p class="sub">${b.status === "bezorgd" ? "AH meldt dat de bestelling is bezorgd." : `Bezorging was gepland voor ${esc(fmtMoment(b.bezorgmoment))}.`} Eén tik en alles staat in de voorraad.</p>
+          ${lijstje("Niet geleverd volgens AH", mist)}</div>
+          <div class="btn-rij"><button class="btn accent groot" data-act="binnen-alles">Ja, alles in de voorraad</button>
+          <button class="btn klein" data-act="binnen-kies">Er ontbrak iets</button></div></div>`;
+      }
+      return `<div class="klaar-band gevuld"><div><b>Besteld bij AH</b>
+        <p class="sub">${b.bezorgmoment?.van ? `Bezorging ${esc(fmtMoment(b.bezorgmoment))}.` : "Bezorgmoment nog onbekend."}${b.totaal ? ` Totaal ${euro(b.totaal)}.` : ""} Na de bezorging vraag ik of alles binnen is.</p></div>
+        <div class="btn-rij"><a class="btn klein" href="https://www.ah.nl/mijn/bestellingen" target="_blank" rel="noopener">Bekijk bij AH</a></div></div>`;
+    }
+    const uiterlijk = bestelUiterlijk();
+    const telaat = uiterlijk && new Date() >= uiterlijk;
     const extra = [
       m.artikelen ? `${m.artikelen} artikelen` : "",
       m.totaal != null ? `ca. ${euro(m.totaal)}` : "",
       m.besparing ? `${euro(m.besparing)} Bonus` : ""
     ].filter(Boolean).join(" · ");
-    const lijstje = (titel, xs) => xs?.length ? `<p class="sub"><b>${titel}:</b> ${xs.map(esc).join(", ")}</p>` : "";
-    return `<div class="klaar-band gevuld"><div><b>Je AH-mandje is gevuld</b>
-        <p class="sub">${esc(extra)}${extra ? ". " : ""}Kies een bezorgmoment en reken af bij AH.</p>
+    return `<div class="klaar-band gevuld${telaat ? " let-op" : ""}"><div><b>${telaat ? "Nog niet besteld!" : "Je AH-mandje is gevuld"}</b>
+        <p class="sub">${esc(extra)}${extra ? ". " : ""}${telaat ? "De eerste kookdag komt eraan en er is nog geen bestelling bij AH gezien. " : ""}Kies een bezorgmoment en reken af bij AH. Daarna zie ik de bestelling vanzelf.</p>
         ${lijstje("Vervangen", (m.vervangingen || []).map((v) => typeof v === "string" ? v : `${v.van} → ${v.naar}`))}
         ${lijstje("Niet gevonden", (m.nietGevonden || []).map((v) => typeof v === "string" ? v : v.naam))}</div>
         <div class="btn-rij"><a class="btn accent groot" href="https://www.ah.nl/mijnlijst" target="_blank" rel="noopener">Bestelling afronden bij AH</a>
+        <button class="btn klein" data-act="binnen-kies">Al binnen? In de voorraad</button>
         <button class="btn klein" data-act="lijst-open">Nieuwe lijst</button></div></div>`;
   }
+
 
   views.voorraad = function () {
     const q = norm(ui.zoek);
@@ -642,7 +736,22 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
         toast("Doorgestuurd. Claude zet de boodschappen in je AH-mandje.");
       } catch (e) { toast(`Doorsturen lukte niet: ${e.message}. Probeer het later opnieuw.`); }
     },
-    "lijst-open"() { state.lijst.status = "open"; state.lijst.verstuurdOp = null; state.lijst.mandje = null; bewaar(); render(); },
+    "lijst-open"() { Object.assign(state.lijst, { status: "open", verstuurdOp: null, mandje: null, bezorging: null, binnenOp: null }); bewaar(); render(); },
+    "binnen-alles"() { boekBinnen(); },
+    "binnen-kies"() {
+      const l = state.lijst;
+      const items = l.bezorging?.items?.length ? l.bezorging.items : (l.bestelling || []);
+      const mist = new Set((l.bezorging?.nietGeleverd || []).map((v) => norm(typeof v === "string" ? v : v.naam)));
+      sheet("Wat is er binnengekomen?", `<p class="sub" style="margin-top:0">Haal het vinkje weg bij wat ontbrak.</p>
+        <div class="rij-lijst">${items.map((it, i) => `<label class="rij" style="cursor:pointer"><div><div class="rij-naam">${esc(it.naam)}</div><div class="rij-sub">${esc(fmtHoeveel(it.hoeveelheid, it.eenheid))}</div></div>
+          <input type="checkbox" data-i="${i}" ${mist.has(norm(it.naam)) ? "" : "checked"} style="width:28px;height:28px"></label>`).join("")}</div>
+        <div class="btn-rij" style="margin-top:14px"><button class="btn accent" data-binnen>In de voorraad</button><button class="btn" data-act="sluit">Annuleren</button></div>`, (root) => {
+        root.querySelector("[data-binnen]").addEventListener("click", () => {
+          const overslaan = new Set([...root.querySelectorAll("input[data-i]")].filter((c) => !c.checked).map((c) => norm(items[+c.dataset.i].naam)));
+          sluitSheet(); boekBinnen(overslaan);
+        });
+      });
+    },
     "eigen-plus"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal++; bewaar(); render(); },
     "eigen-min"(el) { const x = state.lijst.items.find((i) => i.id === el.dataset.id); x.aantal--; if (x.aantal <= 0) state.lijst.items = state.lijst.items.filter((i) => i !== x); bewaar(); render(); },
     "v-plus"(el) { const v = state.voorraad.items.find((i) => i.id === el.dataset.id); v.hoeveelheid = +(v.hoeveelheid + stapVoor(v.eenheid)).toFixed(3); bewaar(); render(); },
@@ -916,7 +1025,7 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
     resetIdle();
     await sync.haal();
     setInterval(() => { if (document.visibilityState === "visible") sync.haal(); }, 30 * 60 * 1000);
-    setInterval(() => { if (state.lijst?.verstuurdOp && !state.lijst.mandje) sync.mandje(); }, 2 * 60 * 1000);
+    setInterval(() => { if (state.lijst?.verstuurdOp && !state.lijst.binnenOp) { sync.mandje(); render(); } }, 2 * 60 * 1000);
   }
   start();
 

@@ -325,3 +325,6 @@ a.btn { text-decoration: none; color: var(--ink); }
 .veld textarea { padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); width: 100%; font: inherit; resize: vertical; min-height: 64px; }
 .veld .sub { margin: 0; font-size: 15px; }
 .chip.nieuw { background: var(--basil); color: var(--yolk); }
+.klaar-band.let-op { border-left-color: var(--tomato); }
+.status-band.let-op { border-left: 6px solid var(--tomato); }
+.rij input[type="checkbox"] { accent-color: var(--leaf); }
