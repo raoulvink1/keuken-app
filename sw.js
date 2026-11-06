@@ -1,6 +1,6 @@
 // Houdt de app beschikbaar als de wifi in de keuken even wegvalt.
-const CACHE = "keukenbord-v1";
-const BESTANDEN = ["./", "index.html", "css/app.css", "js/app.js", "data/voorbeeld.json", "manifest.webmanifest", "icons/icon.svg"];
+const CACHE = "keukenbord-v2";
+const BESTANDEN = ["./", "index.html", "css/app.css", "js/config.js", "js/app.js", "data/voorbeeld.json", "manifest.webmanifest", "icons/icon.svg"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(BESTANDEN))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))); self.clients.claim(); });
 self.addEventListener("fetch", (e) => {
