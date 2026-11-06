@@ -10,7 +10,11 @@ Web-app voor een Android-tablet aan de keukenmuur: weekmenu op basis van de AH B
 - **Voorraad**, **Huishouden** (producten met een interval, zoals vaatwastabletten) en **School** (per kind per dag).
 - **Klok-screensaver** die langzaam verschuift (tegen inbranden) en 's nachts dimt.
 
-Gegevens staan voorlopig lokaal op de tablet. De voorbeeldweek staat in `data/voorbeeld.json`.
+Gegevens (voorraad, akkoord, lijst) staan lokaal op de tablet. De voorbeeldweek staat in `data/voorbeeld.json`.
+
+## Weekmenu van Claude
+
+Elke donderdag om 07:00 zet een geplande Claude-routine het menu voor volgende week in `data/volgende.json` (zaterdag 08:00 volgt een controle). De tablet kijkt elk half uur of er een nieuw menu is, toont dan een melding en een tab "Volgende week", en schuift het menu op maandag door. De opdracht voor de routine staat in `docs/weekmenu-routine.md`.
 
 ## Op de tablet zetten
 
@@ -27,5 +31,4 @@ en open http://localhost:8000.
 
 ## Volgende stappen
 
-- Stap 2: weekmenu automatisch elke week op basis van de AH Bonus, met gedeelde opslag zodat Claude het menu kan klaarzetten.
 - Stap 3: goedgekeurde lijst automatisch in het AH-mandje; afrekenen in de AH-app.

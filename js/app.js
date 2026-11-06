@@ -91,72 +91,41 @@
     return false;
   }
 
-  // ---------- Gedeelde opslag (Supabase) ----------
-  // Tablet en Claude delen hier het weekmenu, de voorraad en de lijst.
-  // Zonder instellingen werkt de app gewoon lokaal.
-  const SYNC_SLEUTELS = ["menu", "volgende", "recepten", "voorraad", "vaste", "school", "lijst"];
-  const CODE_SLEUTEL = "keukenbord.huiscode";
+  // ---------- Weekmenu uit de repo ----------
+  // Claude zet elke donderdag het menu voor volgende week in data/volgende.json.
+  // De tablet haalt dat bestand op; goedkeuren, voorraad en lijst blijven op de tablet.
   const sync = {
-    status: "uit", fout: "", laatst: null, gepusht: {},
-    cfg() {
-      const c = window.KEUKEN_CONFIG || {};
-      let code = ""; try { code = localStorage.getItem(CODE_SLEUTEL) || ""; } catch {}
-      return c.supabaseUrl && c.anonKey && code ? { url: c.supabaseUrl.replace(/\/$/, ""), key: c.anonKey, code } : null;
-    },
-    async rpc(naam, body) {
-      const c = this.cfg(); if (!c) throw new Error("niet ingesteld");
-      const res = await fetch(`${c.url}/rest/v1/rpc/${naam}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: c.key, Authorization: `Bearer ${c.key}` },
-        body: JSON.stringify({ p_code: c.code, ...body })
-      });
-      if (!res.ok) { const t = await res.text(); throw new Error(/geen toegang/.test(t) ? "Huiscode klopt niet" : `Server gaf ${res.status}`); }
-      return res.json();
-    },
+    status: "uit", fout: "", laatst: null,
     async haal() {
-      if (!this.cfg()) { this.status = "uit"; return false; }
       try {
-        const rijen = await this.rpc("keuken_lees", {});
-        let veranderd = false, nieuwVoorstel = false;
-        for (const r of rijen) {
-          if (!SYNC_SLEUTELS.includes(r.sleutel)) continue;
-          const lokaal = state._ts[r.sleutel];
-          if (!lokaal || new Date(r.bijgewerkt) > new Date(lokaal)) {
-            if (r.sleutel === "volgende" && r.data && r.data.week !== state.volgende?.week) nieuwVoorstel = true;
-            state[r.sleutel] = r.data; state._ts[r.sleutel] = r.bijgewerkt;
-            this.gepusht[r.sleutel] = JSON.stringify(r.data);
-            veranderd = true;
-          } else if (this.gepusht[r.sleutel] === undefined) {
-            this.gepusht[r.sleutel] = JSON.stringify(r.data);
+        const res = await fetch("data/volgende.json", { cache: "no-store" });
+        if (res.status === 404) { this.status = "aan"; this.laatst = new Date(); return false; }
+        if (!res.ok) throw new Error(`server gaf ${res.status}`);
+        const data = await res.json();
+        this.status = "aan"; this.fout = ""; this.laatst = new Date();
+        let veranderd = false, nieuw = false;
+        const al = [state.menu?.week, state.volgende?.week];
+        const laatsteDag = data?.dagen?.[data.dagen.length - 1]?.datum;
+        if (data?.week && data.dagen?.length && laatsteDag >= vandaagISO()) {
+          if (!al.includes(data.week)) { state.volgende = data; nieuw = veranderd = true; }
+          else if (state.volgende?.week === data.week && state.volgende.status !== "akkoord" && data.gemaaktOp && data.gemaaktOp !== state.volgende.gemaaktOp) {
+            state.volgende = data; veranderd = true; // bijgewerkt voorstel (zaterdagcontrole)
           }
         }
-        this.status = "aan"; this.fout = ""; this.laatst = new Date();
+        for (const r of data?.recepten || []) {
+          if (!state.recepten.some((x) => norm(x.gerecht) === norm(r.gerecht))) { state.recepten.push(r); veranderd = true; }
+        }
         if (veranderd) {
           compleet(state);
-          if (schuifWeek()) this.duw();
+          schuifWeek();
           try { localStorage.setItem(SLEUTEL, JSON.stringify(state)); } catch {}
           render();
-          if (nieuwVoorstel) toast("Het weekmenu voor volgende week staat klaar. Bekijk het onder Weekmenu.");
+          if (nieuw) toast("Het weekmenu voor volgende week staat klaar. Bekijk het onder Weekmenu.");
         }
-        this.duw();
         return veranderd;
       } catch (e) { this.status = "fout"; this.fout = e.message; return false; }
     },
-    bezig: false,
-    async duw() {
-      if (!this.cfg() || this.status !== "aan" || this.bezig) return;
-      this.bezig = true;
-      try {
-        for (const k of SYNC_SLEUTELS) {
-          const json = JSON.stringify(state[k] ?? null);
-          if (this.gepusht[k] === json) continue;
-          const ts = await this.rpc("keuken_schrijf", { p_sleutel: k, p_data: state[k] ?? null });
-          this.gepusht[k] = json; state._ts[k] = ts;
-        }
-        try { localStorage.setItem(SLEUTEL, JSON.stringify(state)); } catch {}
-      } catch (e) { this.status = "fout"; this.fout = e.message; }
-      finally { this.bezig = false; }
-    }
+    duw() { /* tablet schrijft niet terug naar de repo */ }
   };
 
   // ---------- Toast en sheet ----------
@@ -594,20 +563,15 @@
   }
 
   function instellingenSheet() {
-    const c = window.KEUKEN_CONFIG || {};
-    let code = ""; try { code = localStorage.getItem(CODE_SLEUTEL) || ""; } catch {}
-    const status = !c.supabaseUrl ? "Gedeelde opslag is nog niet ingericht." : sync.status === "aan" ? `Verbonden. Laatst bijgewerkt om ${sync.laatst.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.` : sync.status === "fout" ? `Geen verbinding: ${esc(sync.fout)}.` : "Vul de huiscode in om te verbinden.";
-    sheet("Instellingen", `<form>
-      <p class="sub" style="margin-top:0">${status}</p>
-      <div class="veld"><label for="fi-code">Huiscode</label><input id="fi-code" name="code" value="${esc(code)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
-      <p class="sub">Met de huiscode deelt de tablet het weekmenu, de voorraad en de boodschappenlijst met Claude.</p>
-      <div class="btn-rij" style="margin-top:14px"><button class="btn primair">Opslaan en verbinden</button><button type="button" class="btn" data-act="sluit">Sluiten</button></div></form>`, (root) => {
-      root.querySelector("form").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        try { localStorage.setItem(CODE_SLEUTEL, e.target.code.value.trim()); } catch {}
-        await sync.haal();
+    const status = sync.status === "aan" ? `Laatst gecontroleerd om ${sync.laatst.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.` : sync.status === "fout" ? `Controleren lukte niet: ${esc(sync.fout)}.` : "Nog niet gecontroleerd.";
+    const v = state.volgende;
+    sheet("Weekmenu ophalen", `<p class="sub" style="margin-top:0">Claude zet elke donderdagochtend het menu voor volgende week klaar. De tablet kijkt elk half uur of het er is.</p>
+      <p><b>${v?.dagen?.length ? `Volgende week (${esc(v.week)}) staat klaar${v.status === "akkoord" ? " en is goedgekeurd" : ""}.` : "Nog geen menu voor volgende week."}</b><br><span class="sub">${status}</span></p>
+      <div class="btn-rij" style="margin-top:14px"><button class="btn primair" id="fi-nu">Nu controleren</button><button type="button" class="btn" data-act="sluit">Sluiten</button></div>`, (root) => {
+      root.querySelector("#fi-nu").addEventListener("click", async () => {
+        const nieuw = await sync.haal();
         sluitSheet();
-        toast(sync.status === "aan" ? "Verbonden met de gedeelde opslag." : `Verbinden lukte niet: ${sync.fout || "vul de huiscode in"}.`);
+        if (!nieuw) toast(sync.status === "aan" ? "Er is nog geen nieuw weekmenu." : `Controleren lukte niet: ${sync.fout}.`);
       });
     });
   }
@@ -678,7 +642,7 @@
     render();
     resetIdle();
     await sync.haal();
-    setInterval(() => { if (document.visibilityState === "visible") sync.haal(); }, 5 * 60 * 1000);
+    setInterval(() => { if (document.visibilityState === "visible") sync.haal(); }, 30 * 60 * 1000);
   }
   start();
 
