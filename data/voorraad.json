@@ -1,0 +1,153 @@
+{
+  "bijgewerkt": "2026-11-06T19:26:17.643Z",
+  "voorraad": [
+    {
+      "naam": "pasta",
+      "hoeveelheid": 500,
+      "eenheid": "g",
+      "categorie": "Voorraadkast",
+      "min": 0
+    },
+    {
+      "naam": "rijst",
+      "hoeveelheid": 400,
+      "eenheid": "g",
+      "categorie": "Voorraadkast",
+      "min": 0
+    },
+    {
+      "naam": "tomatenblokjes",
+      "hoeveelheid": 2,
+      "eenheid": "blik",
+      "categorie": "Voorraadkast",
+      "min": 0
+    },
+    {
+      "naam": "ui",
+      "hoeveelheid": 4,
+      "eenheid": "stuks",
+      "categorie": "Groente en fruit",
+      "min": 0
+    },
+    {
+      "naam": "melk",
+      "hoeveelheid": 2,
+      "eenheid": "l",
+      "categorie": "Koelkast",
+      "min": 0
+    },
+    {
+      "naam": "eieren",
+      "hoeveelheid": 6,
+      "eenheid": "stuks",
+      "categorie": "Koelkast",
+      "min": 0
+    },
+    {
+      "naam": "geraspte kaas",
+      "hoeveelheid": 150,
+      "eenheid": "g",
+      "categorie": "Koelkast",
+      "min": 0
+    },
+    {
+      "naam": "boter",
+      "hoeveelheid": 250,
+      "eenheid": "g",
+      "categorie": "Koelkast",
+      "min": 0
+    },
+    {
+      "naam": "appels",
+      "hoeveelheid": 6,
+      "eenheid": "stuks",
+      "categorie": "Groente en fruit",
+      "min": 0
+    },
+    {
+      "naam": "drinkpakjes",
+      "hoeveelheid": 2,
+      "eenheid": "stuks",
+      "categorie": "School",
+      "min": 0
+    }
+  ],
+  "producten": [],
+  "vaste": [
+    {
+      "naam": "Vaatwastabletten",
+      "intervalDagen": 21,
+      "laatst": "2026-10-17",
+      "aantal": 1
+    },
+    {
+      "naam": "Luiers maat 4",
+      "intervalDagen": 7,
+      "laatst": "2026-10-31",
+      "aantal": 1
+    },
+    {
+      "naam": "Billendoekjes",
+      "intervalDagen": 10,
+      "laatst": "2026-10-30",
+      "aantal": 2
+    },
+    {
+      "naam": "Wc-papier",
+      "intervalDagen": 14,
+      "laatst": "2026-10-27",
+      "aantal": 1
+    },
+    {
+      "naam": "Wasmiddel",
+      "intervalDagen": 30,
+      "laatst": "2026-10-20",
+      "aantal": 1
+    },
+    {
+      "naam": "Keukenrol",
+      "intervalDagen": 14,
+      "laatst": "2026-11-01",
+      "aantal": 1
+    }
+  ],
+  "school": [
+    {
+      "naam": "Oudste (9 jaar)",
+      "dagen": 5,
+      "items": [
+        {
+          "naam": "drinkpakjes",
+          "perDag": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "fruit (mandarijnen)",
+          "perDag": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "krentenbollen",
+          "perDag": 1,
+          "eenheid": "stuks"
+        }
+      ]
+    },
+    {
+      "naam": "Middelste (3 jaar)",
+      "dagen": 3,
+      "items": [
+        {
+          "naam": "knijpfruit",
+          "perDag": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "rijstwafels",
+          "perDag": 2,
+          "eenheid": "stuks"
+        }
+      ]
+    }
+  ]
+}
