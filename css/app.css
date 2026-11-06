@@ -322,3 +322,6 @@ a.btn { text-decoration: none; color: var(--ink); }
 .idee-laden span:nth-child(2) { animation-delay: .15s; } .idee-laden span:nth-child(3) { animation-delay: .3s; }
 @keyframes idee-puls { 0%, 100% { opacity: .25; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .idee-laden span, .idee-uit .rij { animation: none; } }
+.veld textarea { padding: 12px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); width: 100%; font: inherit; resize: vertical; min-height: 64px; }
+.veld .sub { margin: 0; font-size: 15px; }
+.chip.nieuw { background: var(--basil); color: var(--yolk); }

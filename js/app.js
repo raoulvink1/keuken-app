@@ -67,12 +67,34 @@
     const res = await fetch("data/voorbeeld.json", { cache: "no-cache" });
     return res.json();
   }
+  const STANDAARD_WENSEN = {
+    gezin: "2 volwassenen en 3 kinderen (9, 3 en 1 jaar), ongeveer 4 volwassen porties",
+    allergieen: "",
+    nietLekker: "",
+    wensen: "Mild gekruid en kindvriendelijk. Voor de 1-jarige geen hele noten, geen honing en weinig zout.",
+    nieuwPerWeek: 2,
+    maxTijd: 35,
+    budget: 60
+  };
+  function wensenTekst(w = state.wensen) {
+    const z = (t) => String(t).trim().replace(/[.!\s]+$/, "");
+    w = { ...w, gezin: z(w.gezin), allergieen: z(w.allergieen), nietLekker: z(w.nietLekker), wensen: z(w.wensen) };
+    return [
+      `Gezin: ${w.gezin}.`,
+      w.allergieen ? `Allergieën en wat echt niet mag (strikt, ook geen sporen in de hoofdingrediënten): ${w.allergieen}.` : "",
+      w.nietLekker ? `Lusten we niet: ${w.nietLekker}.` : "",
+      w.wensen ? `Wensen: ${w.wensen}.` : "",
+      `Doordeweeks maximaal ${w.maxTijd} minuten koken.`,
+      w.budget ? `Budget voor de avondmaaltijden: ongeveer € ${w.budget} per week.` : ""
+    ].filter(Boolean).join("\n");
+  }
   function compleet(s) {
     s.menu ||= { status: "leeg", dagen: [] };
     s.recepten ||= [];
     s.voorraad ||= { items: [] };
     s.vaste ||= { items: [] };
     s.school ||= { kinderen: [] };
+    s.wensen ||= { ...STANDAARD_WENSEN };
     s.lijst ||= { items: [], status: "open" };
     s.volgende ||= null;
     s._ts ||= {};
@@ -168,7 +190,8 @@
       const voorraad = state.voorraad.items.filter((v) => v.hoeveelheid > 0).map((v) => `${v.naam} (${v.hoeveelheid} ${v.eenheid})`).join(", ");
       const vraag = `Stel 3 avondgerechten voor ${dagNaam(dag.datum)} voor op basis van dit idee van het gezin: "${idee}".
 
-Gezin: 5 personen, kinderen van 9, 3 en 1 jaar, dus ongeveer 4 volwassen porties. Mild gekruid, voordelig, boodschappen bij Albert Heijn.${dag.datum && new Date(dag.datum).getDay() % 6 ? " Het is doordeweeks: maximaal 30 tot 40 minuten." : ""}
+${wensenTekst()}
+Voordelig, boodschappen bij Albert Heijn.${dag.datum && new Date(dag.datum).getDay() % 6 ? ` Het is doordeweeks: maximaal ${state.wensen.maxTijd} minuten.` : ""}
 Vervangt: ${dag.gerecht || "nog niets"}.
 Andere avonden deze week (niet herhalen): ${anderen || "geen"}.
 Bonusproducten in dit menu, gebruik ze waar het past: ${bonus || "onbekend"}.
@@ -355,7 +378,7 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
         <div>
           <div class="eyebrow">${dag.gekookt ? "Gekookt" : isVandaag ? "Vanavond" : "Op het menu"}${state.menu.voorbeeld ? ' · <span class="chip voorbeeld">Voorbeeld</span>' : ""}</div>
           <h2>${esc(dag.gerecht)}</h2>
-          <div class="hero-feiten"><span><b>${esc(dag.tijd)}</b> minuten</span><span>ca. <b>${euro(dag.kosten)}</b> voor het gezin</span><span><b>4</b> porties</span>${(dag.bonus || []).map((b) => `<span class="chip bonus">Bonus: ${esc(b)}</span>`).join("")}</div>
+          <div class="hero-feiten">${dag.nieuw ? '<span class="chip nieuw">Nieuw gerecht</span>' : ""}<span><b>${esc(dag.tijd)}</b> minuten</span><span>ca. <b>${euro(dag.kosten)}</b> voor het gezin</span><span><b>4</b> porties</span>${(dag.bonus || []).map((b) => `<span class="chip bonus">Bonus: ${esc(b)}</span>`).join("")}</div>
           ${dag.kindertip ? `<div class="kindertip"><b>Kindertip:</b> ${esc(dag.kindertip)}</div>` : ""}
         </div>
         ${kookKnop}
@@ -391,7 +414,7 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
       <article class="dag ${d.datum === vandaag ? "vandaag-dag" : ""} ${d.geschrapt ? "geschrapt" : ""}">
         <div class="dag-kop"><span class="dag-naam">${esc(cap(dagNaam(d.datum)))}</span><span class="dag-datum">${esc(korteDatum(d.datum))}</span></div>
         <div class="dag-gerecht">${esc(d.gerecht)}</div>
-        <div class="dag-meta"><span class="chip">${esc(d.tijd)} min</span><span class="chip">${euro(d.kosten)}</span>${(d.bonus || []).length ? `<span class="chip bonus">${d.bonus.length}× Bonus</span>` : ""}${d.gekookt ? '<span class="chip ok">Gekookt</span>' : ""}</div>
+        <div class="dag-meta"><span class="chip">${esc(d.tijd)} min</span><span class="chip">${euro(d.kosten)}</span>${d.nieuw ? '<span class="chip nieuw">Nieuw</span>' : ""}${(d.bonus || []).length ? `<span class="chip bonus">${d.bonus.length}× Bonus</span>` : ""}${d.gekookt ? '<span class="chip ok">Gekookt</span>' : ""}</div>
         <div class="dag-acties">
           <button class="btn klein" data-act="open-dag" data-datum="${d.datum}">Recept</button>
           ${d.gekookt ? "" : `<button class="btn klein" data-act="wissel" data-datum="${d.datum}">Ander gerecht</button>`}
@@ -651,6 +674,18 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
       if (bestaand) bestaand.aantal++; else state.lijst.items.push({ id: uid(), naam: cap(naam), aantal: 1 });
       bewaar(); render(); $("#eigen-naam")?.focus();
     }
+    if (f.dataset.form === "wensen") {
+      const w = state.wensen;
+      for (const k of ["gezin", "allergieen", "nietLekker", "wensen"]) w[k] = f[k].value.trim();
+      w.nieuwPerWeek = +f.nieuwPerWeek.value; w.maxTijd = +f.maxTijd.value; w.budget = +f.budget.value || 0;
+      w.bijgewerkt = new Date().toISOString(); w.verstuurd = false;
+      bewaar(); render();
+      if (!gh.token()) { toast("Wensen opgeslagen op de tablet. Stel een GitHub-sleutel in zodat Claude ze kan lezen."); return; }
+      gh.schrijf("data/wensen.json", { ...w, verstuurd: undefined }, "Gezinswensen bijgewerkt vanaf de tablet")
+        .then(() => { w.verstuurd = true; bewaar(); render(); toast("Wensen opgeslagen. Het volgende weekmenu houdt er rekening mee."); })
+        .catch((err) => toast(`Opgeslagen op de tablet, doorsturen lukte niet: ${err.message}.`));
+      return;
+    }
     if (f.dataset.form === "claude") {
       const v = f.sleutel.value.trim();
       if (v) { try { localStorage.setItem(CLAUDE_SLEUTEL, v); } catch {} }
@@ -758,17 +793,40 @@ Geef per gerecht in het Nederlands: naam, in één korte zin waarom het past bij
   }
 
   // ---------- Instellingen ----------
-  const INST_TABS = [["huishouden", "Huishouden"], ["school", "School"], ["app", "App en verbinding"]];
+  const INST_TABS = [["wensen", "Gezin en wensen"], ["huishouden", "Huishouden"], ["school", "School"], ["app", "App en verbinding"]];
   function alsSectie(html) {
     // Maak van de paginakop van een onderdeel een sectiekop binnen Instellingen.
     return html.replace(/<div class="eyebrow">[^<]*<\/div>/, "").replace("<h1>", '<h2 class="sectie-titel">').replace("</h1>", "</h2>").replace('<div class="kop">', '<div class="kop sectie">');
   }
   views.instellingen = function () {
-    ui.instTab ||= "huishouden";
+    ui.instTab ||= "wensen";
     const tabs = `<div class="btn-rij" role="tablist" style="margin-bottom:8px">${INST_TABS.map(([k, t]) => `<button class="btn klein ${ui.instTab === k ? "primair" : ""}" data-act="inst-tab" data-tab="${k}" role="tab" aria-selected="${ui.instTab === k}">${t}</button>`).join("")}</div>`;
-    const inhoud = ui.instTab === "school" ? alsSectie(views.school()) : ui.instTab === "app" ? appInstellingen() : alsSectie(views.huishouden());
-    return `<div class="kop"><div><div class="eyebrow">Huishouden, school en app</div><h1>Instellingen</h1></div></div>${tabs}<div class="inst-inhoud" data-tab="${ui.instTab}">${inhoud}</div>`;
+    const inhoud = ui.instTab === "school" ? alsSectie(views.school()) : ui.instTab === "app" ? appInstellingen() : ui.instTab === "wensen" ? wensenInstellingen() : alsSectie(views.huishouden());
+    return `<div class="kop"><div><div class="eyebrow">Gezin, huishouden, school en app</div><h1>Instellingen</h1></div></div>${tabs}<div class="inst-inhoud" data-tab="${ui.instTab}">${inhoud}</div>`;
   };
+  function wensenInstellingen() {
+    const w = state.wensen;
+    const veld = (naam, label, uitleg, voorbeeld) => `<div class="veld"><label for="fw-${naam}">${label}</label>
+      <textarea id="fw-${naam}" name="${naam}" rows="2" placeholder="${esc(voorbeeld)}">${esc(w[naam])}</textarea>${uitleg ? `<span class="sub">${uitleg}</span>` : ""}</div>`;
+    const keuze = (naam, label, opties, eenheid) => `<div class="veld"><label for="fw-${naam}">${label}</label>
+      <select id="fw-${naam}" name="${naam}">${opties.map((o) => `<option value="${o}" ${+w[naam] === o ? "selected" : ""}>${o}${eenheid}</option>`).join("")}</select></div>`;
+    return `<form data-form="wensen" class="twee-kol" style="margin-top:14px">
+      <section class="paneel"><h3>Ons gezin</h3>
+        <p class="sub" style="margin-top:0">Claude houdt hier rekening mee bij elk weekmenu en bij Ander gerecht.</p>
+        ${veld("gezin", "Wie eten er mee", "", "Bijv. 2 volwassenen, kinderen van 9, 3 en 1")}
+        ${veld("allergieen", "Allergieën en wat niet mag", "Hier houdt Claude zich altijd aan.", "Bijv. pinda, lactose, geen varkensvlees")}
+        ${veld("nietLekker", "Lusten we niet", "", "Bijv. spruitjes, champignons")}
+        ${veld("wensen", "Wensen", "", "Bijv. vaker vis, één avond vegetarisch, vrijdag iets feestelijks")}</section>
+      <section class="paneel"><h3>Het menu</h3>
+        ${keuze("nieuwPerWeek", "Nieuwe gerechten per week", [0, 1, 2, 3, 4], "")}
+        <p class="sub" style="margin-top:-6px">Gerechten die jullie nog niet eerder op het menu hadden. Ze krijgen een label Nieuw.</p>
+        ${keuze("maxTijd", "Doordeweeks maximaal koken", [20, 30, 35, 40, 50, 60], " minuten")}
+        <div class="veld"><label for="fw-budget">Budget per week voor het avondeten</label>
+          <input id="fw-budget" name="budget" type="number" min="0" step="5" inputmode="numeric" value="${esc(w.budget)}"></div>
+        <div class="btn-rij"><button class="btn primair">Wensen opslaan</button></div>
+        <p class="sub">${w.bijgewerkt ? `Laatst opgeslagen ${new Date(w.bijgewerkt).toLocaleString("nl-NL", { weekday: "long", hour: "2-digit", minute: "2-digit" })}${w.verstuurd ? ", Claude kan ze lezen" : ", nog niet doorgestuurd (geen GitHub-sleutel)"}.` : "Het volgende weekmenu gebruikt wat hier staat."}</p></section>
+    </form>`;
+  }
   function appInstellingen() {
     const status = sync.status === "aan" ? `Laatst gecontroleerd om ${sync.laatst.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}.` : sync.status === "fout" ? `Controleren lukte niet: ${esc(sync.fout)}.` : "Nog niet gecontroleerd.";
     const v = state.volgende;
