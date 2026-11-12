@@ -1,44 +1,191 @@
 {
-  "week": "2026-W46",
+  "week": "2026-W47",
   "status": "menu",
-  "gemaaktOp": "2026-11-10T05:15:00+01:00",
-  "bonusBron": "niet beschikbaar (ah.nl/bonus gaf Access Denied)",
+  "gemaaktOp": "2026-11-12T06:45:59+01:00",
+  "akkoordVoor": "2026-11-14",
+  "bonusBron": "niet beschikbaar",
   "bonusBesparing": 0,
   "dagen": [
     {
-      "datum": "2026-11-09",
-      "gerecht": "Gebakken rijst met ei, ham en doperwten",
-      "tijd": 25,
-      "kosten": 6.0,
+      "datum": "2026-11-16",
+      "gerecht": "Romige pompoensoep met ham-kaastosti's",
+      "tijd": 30,
+      "kosten": 8.0,
       "bonus": [],
       "nieuw": false,
       "porties": 4,
-      "kindertip": "Voor de kleinste: ham heel klein snijden en geen sojasaus op zijn portie.",
+      "kindertip": "Soep voor de kleinste apart scheppen voordat je peper toevoegt en laten afkoelen tot lauw. Tosti in reepjes snijden om te dippen.",
       "ingredienten": [
+        {
+          "naam": "pompoen",
+          "hoeveelheid": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "ui",
+          "hoeveelheid": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "winterpeen",
+          "hoeveelheid": 2,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "groentebouillonblokje (minder zout)",
+          "hoeveelheid": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "kookroom",
+          "hoeveelheid": 100,
+          "eenheid": "ml"
+        },
+        {
+          "naam": "volkorenbrood",
+          "hoeveelheid": 8,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "ham",
+          "hoeveelheid": 100,
+          "eenheid": "g"
+        },
+        {
+          "naam": "kaas plakken",
+          "hoeveelheid": 100,
+          "eenheid": "g"
+        },
+        {
+          "naam": "boter",
+          "hoeveelheid": 30,
+          "eenheid": "g"
+        }
+      ],
+      "benodigdheden": [
+        "grote soeppan",
+        "staafmixer",
+        "tosti-ijzer of koekenpan",
+        "snijplank en scherp mes"
+      ],
+      "voorbereiding": [
+        "Snijd de pompoen doormidden, schep de pitten eruit en snijd hem met schil in blokjes van 3 cm (een flespompoen hoef je niet te schillen).",
+        "Snijd de ui grof.",
+        "Schil de winterpeen en snijd hem in plakjes.",
+        "Los het bouillonblokje op in 1 liter heet water."
+      ],
+      "stappen": [
+        "Smelt 1 el boter in de soeppan op middelhoog vuur. Bak de ui 4 minuten tot hij glazig is.",
+        "Doe de pompoen en de winterpeen erbij en bak 3 minuten al roerend mee.",
+        "Giet de 1 liter bouillon erbij. Breng aan de kook, zet het vuur laag en laat 15 minuten zachtjes koken met de deksel erop, tot de pompoen zacht is als je er met een vork in prikt.",
+        "Beleg ondertussen 4 sneetjes brood met 100 g ham en 100 g kaas en leg er een tweede sneetje op. Besmeer de buitenkant dun met boter.",
+        "Bak de tosti's in het tosti-ijzer of in de koekenpan op middelhoog vuur 3 minuten per kant, tot ze goudbruin zijn en de kaas gesmolten is.",
+        "Haal de soeppan van het vuur en pureer de soep met de staafmixer 2 minuten tot hij glad is.",
+        "Roer 100 ml kookroom erdoor en warm 1 minuut op laag vuur. Niet laten koken.",
+        "Opdienen: soep in kommen, tosti's in reepjes erbij. Voor de 1-jarige een kleine kom lauwe soep zonder peper en een halve tosti in reepjes; bewaar de rest van de kookroom in de koelkast voor zaterdag."
+      ]
+    },
+    {
+      "datum": "2026-11-17",
+      "gerecht": "Macaroni met prei, ham en kaassaus",
+      "tijd": 30,
+      "kosten": 5.0,
+      "bonus": [],
+      "nieuw": false,
+      "porties": 4,
+      "kindertip": "Prei heel fijn snijden, dan valt hij weg in de saus. Voor de kleinste geen extra zout.",
+      "ingredienten": [
+        {
+          "naam": "pasta",
+          "hoeveelheid": 400,
+          "eenheid": "g"
+        },
+        {
+          "naam": "prei",
+          "hoeveelheid": 2,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "ham",
+          "hoeveelheid": 100,
+          "eenheid": "g"
+        },
+        {
+          "naam": "boter",
+          "hoeveelheid": 40,
+          "eenheid": "g"
+        },
+        {
+          "naam": "bloem",
+          "hoeveelheid": 40,
+          "eenheid": "g"
+        },
+        {
+          "naam": "melk",
+          "hoeveelheid": 500,
+          "eenheid": "ml"
+        },
+        {
+          "naam": "geraspte kaas",
+          "hoeveelheid": 100,
+          "eenheid": "g"
+        }
+      ],
+      "benodigdheden": [
+        "grote pan voor de pasta",
+        "steelpan voor de saus",
+        "garde",
+        "vergiet"
+      ],
+      "voorbereiding": [
+        "Snijd de prei in dunne ringen en spoel ze goed af in een vergiet (er zit vaak zand tussen).",
+        "Snijd de rest van de ham van maandag in kleine stukjes.",
+        "Meet 500 ml melk af."
+      ],
+      "stappen": [
+        "Breng een grote pan water aan de kook. Kook 400 g macaroni 9 minuten (kijk op het pak) tot hij beetgaar is.",
+        "Smelt ondertussen 40 g boter in de steelpan op middelhoog vuur. Bak de prei 6 minuten tot hij zacht is.",
+        "Strooi 40 g bloem over de prei en roer 1 minuut tot alles bedekt is.",
+        "Giet de 500 ml melk er in drie keer bij en roer steeds met de garde tot het glad is. Laat 4 minuten zachtjes koken tot de saus dikker wordt en aan een lepel blijft hangen.",
+        "Haal de pan van het vuur en roer 100 g geraspte kaas en de ham erdoor tot de kaas gesmolten is.",
+        "Giet de macaroni af in het vergiet en schep hem door de saus.",
+        "Opdienen in diepe borden. Voor de kleinste een kleine portie apart en even laten afkoelen; de ham daarin nog wat kleiner knippen."
+      ]
+    },
+    {
+      "datum": "2026-11-18",
+      "gerecht": "Kip-saté met rijst, komkommer en kroepoek",
+      "tijd": 30,
+      "kosten": 7.5,
+      "bonus": [],
+      "nieuw": false,
+      "porties": 4,
+      "kindertip": "Satésaus is gladde pindasaus, dus geen hele noten; goed voor de 1-jarige als jullie pinda al eerder hebben gegeven. Kroepoek is zout: voor de kleinste een half stukje of niet.",
+      "ingredienten": [
+        {
+          "naam": "kipdijfilet",
+          "hoeveelheid": 500,
+          "eenheid": "g"
+        },
         {
           "naam": "rijst",
           "hoeveelheid": 300,
           "eenheid": "g"
         },
         {
-          "naam": "eieren",
-          "hoeveelheid": 3,
-          "eenheid": "stuks"
+          "naam": "satésaus",
+          "hoeveelheid": 1,
+          "eenheid": "pot"
         },
         {
-          "naam": "hamblokjes",
-          "hoeveelheid": 150,
-          "eenheid": "g"
-        },
-        {
-          "naam": "doperwten",
-          "hoeveelheid": 300,
-          "eenheid": "g"
-        },
-        {
-          "naam": "ui",
+          "naam": "komkommer",
           "hoeveelheid": 1,
           "eenheid": "stuks"
+        },
+        {
+          "naam": "kroepoek",
+          "hoeveelheid": 1,
+          "eenheid": "zak"
         },
         {
           "naam": "ketjap",
@@ -48,58 +195,47 @@
       ],
       "benodigdheden": [
         "pan voor de rijst",
-        "grote koekenpan of wok",
-        "kom"
+        "grote koekenpan",
+        "steelpan voor de saus"
       ],
       "voorbereiding": [
-        "Snijd de ui in kleine blokjes.",
-        "Klop de 3 eieren los in een kom met een snufje zout.",
-        "Laat de doperwten (diepvries) in een zeef ontdooien."
+        "Snijd de helft van het pak kipdijfilet (500 g) in blokjes van 2 cm. Bewaar de andere helft in de koelkast voor zaterdag.",
+        "Snijd de komkommer in halve plakjes.",
+        "Spoel 300 g rijst in een zeef tot het water helder is."
       ],
       "stappen": [
-        "Breng een pan met water aan de kook. Kook 300 g rijst 12 minuten tot hij gaar is en giet af in een zeef.",
-        "Verhit 1 el olie in de koekenpan op middelhoog vuur. Bak de ui 4 minuten tot hij glazig is.",
-        "Doe 150 g hamblokjes erbij en bak 3 minuten mee tot ze licht bruin zijn.",
-        "Schuif alles naar de rand. Giet de losgeklopte eieren in het midden en roer 2 minuten tot ze net gestold zijn.",
-        "Voeg de gekookte rijst en 300 g doperwten toe. Zet het vuur hoog en roerbak 5 minuten tot de rijst warm is en hier en daar knispert.",
-        "Proef en voeg 2 el ketjap toe. Roer 1 minuut door.",
-        "Opdienen in diepe borden. Voor de kleinste een schepje apart houden vóór de ketjap erbij gaat en goed laten afkoelen."
+        "Breng de rijst met 450 ml water aan de kook in de pan met de deksel erop. Zet het vuur laag en laat 12 minuten garen. Daarna van het vuur af en 5 minuten laten staan met de deksel erop.",
+        "Verhit 1 el olie in de koekenpan op hoog vuur. Bak de kip 6 minuten tot hij rondom bruin is en vanbinnen niet meer roze.",
+        "Schenk 1 el ketjap over de kip en bak 1 minuut tot hij glanst.",
+        "Warm de helft van de pot satésaus met 4 el water in de steelpan op laag vuur 4 minuten, tot hij glad en warm is. Roer af en toe.",
+        "Zet de kroepoek in de zak op tafel en de komkommer in een schaaltje.",
+        "Opdienen: rijst, kip en saus erover, komkommer ernaast. Voor de 1-jarige de kip in kleine stukjes, een klein beetje saus en wat komkommer zonder schil."
       ]
     },
     {
-      "datum": "2026-11-10",
-      "gerecht": "Pasta met tomaten-roomsaus, kip en spinazie",
+      "datum": "2026-11-19",
+      "gerecht": "Milde shakshuka met eieren in tomatensaus en brood",
       "tijd": 25,
-      "kosten": 7.5,
+      "kosten": 5.5,
       "bonus": [],
-      "nieuw": false,
+      "nieuw": true,
       "porties": 4,
-      "kindertip": "Spinazie fijn hakken, dan valt het nauwelijks op.",
+      "kindertip": "Laat het ei voor de kleintjes helemaal stollen (dooier niet meer vloeibaar). Brood in reepjes om te dippen.",
       "ingredienten": [
         {
-          "naam": "pasta",
-          "hoeveelheid": 400,
-          "eenheid": "g"
-        },
-        {
-          "naam": "kipfilet",
-          "hoeveelheid": 400,
-          "eenheid": "g"
-        },
-        {
           "naam": "tomatenblokjes",
-          "hoeveelheid": 1,
+          "hoeveelheid": 2,
           "eenheid": "blik"
         },
         {
-          "naam": "kookroom",
-          "hoeveelheid": 250,
-          "eenheid": "ml"
+          "naam": "eieren",
+          "hoeveelheid": 6,
+          "eenheid": "stuks"
         },
         {
-          "naam": "spinazie",
-          "hoeveelheid": 300,
-          "eenheid": "g"
+          "naam": "paprika",
+          "hoeveelheid": 2,
+          "eenheid": "stuks"
         },
         {
           "naam": "ui",
@@ -107,104 +243,121 @@
           "eenheid": "stuks"
         },
         {
-          "naam": "geraspte kaas",
-          "hoeveelheid": 50,
-          "eenheid": "g"
+          "naam": "knoflook",
+          "hoeveelheid": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "paprikapoeder (mild)",
+          "hoeveelheid": 1,
+          "eenheid": "pot"
+        },
+        {
+          "naam": "komijn",
+          "hoeveelheid": 1,
+          "eenheid": "pot"
+        },
+        {
+          "naam": "volkorenbrood",
+          "hoeveelheid": 6,
+          "eenheid": "stuks"
         }
       ],
       "benodigdheden": [
-        "grote pan voor de pasta",
-        "grote koekenpan",
-        "snijplank"
+        "grote koekenpan met deksel (of een vel aluminiumfolie)",
+        "snijplank en mes"
       ],
       "voorbereiding": [
         "Snijd de ui in kleine blokjes.",
-        "Snijd de kipfilet in blokjes van ongeveer 2 cm."
+        "Haal de zaadjes uit de paprika's en snijd ze in reepjes.",
+        "Pers of snijd 1 teentje knoflook fijn.",
+        "Open de 2 blikken tomatenblokjes."
       ],
       "stappen": [
-        "Breng een grote pan water met een snuf zout aan de kook. Kook 400 g pasta volgens de verpakking, meestal 10 minuten, en giet af.",
-        "Verhit 1 el olie in de koekenpan op middelhoog vuur. Bak de kipblokjes 6 minuten tot ze rondom wit en licht bruin zijn.",
-        "Doe de ui erbij en bak 3 minuten mee tot hij zacht is.",
-        "Giet 1 blik tomatenblokjes erbij en laat 5 minuten zachtjes pruttelen op laag vuur.",
-        "Roer 250 ml kookroom erdoor en doe de 300 g spinazie er in delen bij. Roer 3 minuten tot de spinazie geslonken is.",
-        "Schep de pasta door de saus en warm 1 minuut mee.",
-        "Opdienen met 50 g geraspte kaas erover. Voor de kleinste de kip extra klein snijden."
+        "Verhit 2 el olie in de koekenpan op middelhoog vuur. Bak de ui en paprika 6 minuten tot ze zacht zijn.",
+        "Doe de knoflook, 1 tl paprikapoeder en 1/2 tl komijn erbij en bak 1 minuut tot het lekker ruikt.",
+        "Giet de 2 blikken tomatenblokjes erbij. Laat 8 minuten zachtjes pruttelen zonder deksel tot de saus wat dikker is.",
+        "Maak met de achterkant van een lepel 6 kuiltjes in de saus en breek in elk kuiltje 1 ei.",
+        "Doe de deksel op de pan en laat 6 minuten op laag vuur garen tot het eiwit wit en stevig is. Voor de kinderen nog 2 minuten langer, tot ook de dooier stevig is.",
+        "Rooster ondertussen 6 sneetjes brood in de broodrooster.",
+        "Opdienen: pan midden op tafel, ieder schept een ei met saus op het bord met brood erbij. Voor de 1-jarige een helemaal gestold ei fijngeprakt door wat saus, met reepjes brood."
       ]
     },
     {
-      "datum": "2026-11-11",
-      "gerecht": "Pannenkoeken met spek en appel",
-      "tijd": 30,
-      "kosten": 5.0,
+      "datum": "2026-11-20",
+      "gerecht": "Hamburgers met zoete-aardappelfrietjes uit de oven",
+      "tijd": 35,
+      "kosten": 10.0,
       "bonus": [],
       "nieuw": false,
       "porties": 4,
-      "kindertip": "De kleinste krijgt een pannenkoek met alleen appel, in reepjes gesneden.",
+      "kindertip": "Voor de kleinste een halve burger in kleine stukjes en de frietjes zonder zout. De 3-jarige kan zelf de broodjes beleggen.",
       "ingredienten": [
         {
-          "naam": "pannenkoekenmix",
-          "hoeveelheid": 400,
-          "eenheid": "g"
-        },
-        {
-          "naam": "melk",
-          "hoeveelheid": 0.8,
-          "eenheid": "l"
-        },
-        {
-          "naam": "eieren",
-          "hoeveelheid": 2,
+          "naam": "hamburgers",
+          "hoeveelheid": 4,
           "eenheid": "stuks"
         },
         {
-          "naam": "ontbijtspek",
-          "hoeveelheid": 150,
-          "eenheid": "g"
-        },
-        {
-          "naam": "appels",
-          "hoeveelheid": 2,
+          "naam": "hamburgerbroodjes",
+          "hoeveelheid": 4,
           "eenheid": "stuks"
         },
         {
-          "naam": "boter",
-          "hoeveelheid": 50,
-          "eenheid": "g"
-        },
-        {
-          "naam": "stroop",
+          "naam": "zoete aardappel",
           "hoeveelheid": 1,
-          "eenheid": "pot"
+          "eenheid": "kg"
+        },
+        {
+          "naam": "ijsbergsla",
+          "hoeveelheid": 1,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "tomaten",
+          "hoeveelheid": 2,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "kaas plakken",
+          "hoeveelheid": 4,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "ketchup",
+          "hoeveelheid": 1,
+          "eenheid": "fles"
         }
       ],
       "benodigdheden": [
-        "grote kom",
-        "garde",
+        "oven",
+        "bakplaat met bakpapier",
         "koekenpan",
-        "pollepel"
+        "snijplank en mes"
       ],
       "voorbereiding": [
-        "Schil de 2 appels en snijd ze in dunne plakjes."
+        "Verwarm de oven voor op 220 °C.",
+        "Schil de zoete aardappel en snijd hem in staafjes van 1 cm dik.",
+        "Snijd de tomaten in plakjes en scheur een paar slablaadjes los."
       ],
       "stappen": [
-        "Doe 400 g pannenkoekenmix, 0,8 l melk en 2 eieren in een kom. Klop met de garde 2 minuten tot er geen klontjes meer in zitten. Laat 5 minuten staan.",
-        "Smelt een klontje boter in de koekenpan op middelhoog vuur tot het schuim wegtrekt.",
-        "Leg 2 plakjes spek of een paar appelplakjes in de pan en bak 1 minuut.",
-        "Giet een pollepel beslag erover en draai de pan zodat de bodem bedekt is.",
-        "Bak 2 minuten tot de bovenkant droog is en de onderkant goudbruin. Keer om en bak nog 1 minuut.",
-        "Herhaal tot het beslag op is. Houd de klaar pannenkoeken warm onder een bord.",
-        "Opdienen met stroop. Voor de kleinste een appelpannenkoek in reepjes snijden en goed laten afkoelen."
+        "Leg de zoete-aardappelstaafjes op de bakplaat met bakpapier. Schep ze om met 2 el olie en 1 tl paprikapoeder en leg ze naast elkaar, niet op elkaar.",
+        "Bak de frietjes 25 minuten in de oven op 220 °C. Keer ze na 12 minuten om. Ze zijn klaar als de randjes bruin zijn.",
+        "Verhit na 15 minuten 1 el olie in de koekenpan op middelhoog vuur. Bak de 4 hamburgers 4 minuten per kant tot ze vanbinnen niet meer roze zijn.",
+        "Leg de laatste minuut op elke burger een plak kaas en doe de deksel op de pan, zodat de kaas smelt.",
+        "Snijd de broodjes open en verwarm ze de laatste 3 minuten in de oven.",
+        "Opdienen: iedereen belegt zelf zijn broodje met sla, tomaat, burger en ketchup, frietjes ernaast. Voor de kleinste de burger in stukjes met een paar frietjes, zonder ketchup."
       ]
     },
     {
-      "datum": "2026-11-12",
-      "gerecht": "Griekse souvlaki-kip met pita, tzatziki en komkommer",
-      "tijd": 30,
+      "datum": "2026-11-21",
+      "gerecht": "Kippenpastei met prei en champignons uit de oven",
+      "tijd": 50,
       "kosten": 9.0,
       "bonus": [],
       "nieuw": true,
       "porties": 4,
-      "kindertip": "Laat de kinderen zelf hun pita vullen; de kleinste krijgt kip en komkommer in stukjes zonder saus.",
+      "kindertip": "De vulling is mild en romig. Voor de kleinste de vulling apart opscheppen en de kip klein snijden; het knapperige deeg kan in kleine stukjes ernaast.",
       "ingredienten": [
         {
           "naam": "kipdijfilet",
@@ -212,150 +365,87 @@
           "eenheid": "g"
         },
         {
-          "naam": "pitabroodjes",
-          "hoeveelheid": 8,
+          "naam": "prei",
+          "hoeveelheid": 1,
           "eenheid": "stuks"
         },
         {
-          "naam": "tzatziki",
+          "naam": "champignons",
+          "hoeveelheid": 250,
+          "eenheid": "g"
+        },
+        {
+          "naam": "diepvries doperwten",
           "hoeveelheid": 200,
           "eenheid": "g"
         },
         {
-          "naam": "komkommer",
+          "naam": "kookroom",
+          "hoeveelheid": 150,
+          "eenheid": "ml"
+        },
+        {
+          "naam": "bloem",
+          "hoeveelheid": 20,
+          "eenheid": "g"
+        },
+        {
+          "naam": "bladerdeeg",
+          "hoeveelheid": 1,
+          "eenheid": "pak"
+        },
+        {
+          "naam": "eieren",
           "hoeveelheid": 1,
           "eenheid": "stuks"
         },
         {
-          "naam": "tomaten",
-          "hoeveelheid": 3,
-          "eenheid": "stuks"
-        },
-        {
-          "naam": "citroen",
+          "naam": "aardappelen",
           "hoeveelheid": 1,
-          "eenheid": "stuks"
-        },
-        {
-          "naam": "gedroogde oregano",
-          "hoeveelheid": 1,
-          "eenheid": "pot"
+          "eenheid": "kg"
         }
       ],
       "benodigdheden": [
-        "grote koekenpan of grillpan",
-        "kom",
-        "snijplank",
-        "broodrooster of oven"
+        "oven",
+        "ovenschaal van ongeveer 20 x 30 cm",
+        "grote koekenpan",
+        "pan voor de aardappelen",
+        "kwastje (of je vingers)"
       ],
       "voorbereiding": [
-        "Snijd de kipdijfilet in reepjes.",
-        "Meng in een kom de kip met 2 el olie, 1 tl oregano, het sap van een halve citroen en een snuf zout. Laat 10 minuten staan.",
-        "Snijd de komkommer en de tomaten in blokjes."
+        "Haal het bladerdeeg 10 minuten van tevoren uit de vriezer of koelkast.",
+        "Verwarm de oven voor op 200 °C.",
+        "Snijd de rest van de kipdijfilet (500 g) in blokjes van 2 cm.",
+        "Snijd de prei in dunne ringen en spoel goed af; snijd de champignons in plakjes.",
+        "Schil de aardappelen en snijd ze in gelijke stukken.",
+        "Klop 1 ei los in een kopje."
       ],
       "stappen": [
-        "Verhit de koekenpan op hoog vuur, zonder extra olie, 2 minuten tot hij goed heet is.",
-        "Bak de kip in twee keer, elke keer 6 minuten, en keer halverwege. Hij is goed als er geen roze meer te zien is.",
-        "Doe alle kip terug in de pan, knijp de andere halve citroen erboven uit en roer 1 minuut.",
-        "Rooster de pitabroodjes 2 minuten in de broodrooster of 5 minuten in een oven op 200 graden tot ze opbollen.",
-        "Snijd de pita's open aan de bovenkant.",
-        "Zet kip, tzatziki, komkommer en tomaat op tafel.",
-        "Opdienen: ieder vult zijn eigen pita. Voor de kleinste kip en komkommer in kleine stukjes, zonder tzatziki of met een klein beetje."
+        "Zet de aardappelen op in een pan met koud water. Breng aan de kook en kook ze 20 minuten tot ze gaar zijn. Daarna afgieten.",
+        "Verhit 1 el olie in de koekenpan op hoog vuur. Bak de kip 5 minuten tot hij rondom bruin is.",
+        "Doe de prei en champignons erbij en bak 5 minuten op middelhoog vuur tot de prei zacht is.",
+        "Strooi 20 g bloem erover en roer 1 minuut. Giet 150 ml kookroom en 100 ml water erbij en laat 3 minuten zachtjes koken tot de saus dik is.",
+        "Roer 200 g doperwten (diepvries) erdoor en schep de vulling in de ovenschaal.",
+        "Leg de plakjes bladerdeeg over de vulling, druk de randjes tegen elkaar en tegen de schaal. Prik met een vork een paar gaatjes in het deeg.",
+        "Bestrijk het deeg met het losgeklopte ei.",
+        "Bak de pastei 25 minuten in de oven op 200 °C tot het deeg goudbruin en opgezwollen is.",
+        "Opdienen: pastei uit de schaal scheppen met de aardappelen ernaast. Voor de 1-jarige de vulling met wat aardappel fijnprakken en even laten afkoelen."
       ]
     },
     {
-      "datum": "2026-11-13",
-      "gerecht": "Boerenkoolstamppot met rookworst",
-      "tijd": 30,
-      "kosten": 8.0,
+      "datum": "2026-11-22",
+      "gerecht": "Gehaktballen in jus met rode kool, appeltjes en aardappelen",
+      "tijd": 45,
+      "kosten": 8.5,
       "bonus": [],
       "nieuw": false,
       "porties": 4,
-      "kindertip": "Een klein kuiltje jus in de stamppot maakt het voor de kinderen leuker.",
-      "ingredienten": [
-        {
-          "naam": "kruimige aardappelen",
-          "hoeveelheid": 1500,
-          "eenheid": "g"
-        },
-        {
-          "naam": "gesneden boerenkool",
-          "hoeveelheid": 500,
-          "eenheid": "g"
-        },
-        {
-          "naam": "rookworst",
-          "hoeveelheid": 2,
-          "eenheid": "stuks"
-        },
-        {
-          "naam": "melk",
-          "hoeveelheid": 0.2,
-          "eenheid": "l"
-        },
-        {
-          "naam": "boter",
-          "hoeveelheid": 30,
-          "eenheid": "g"
-        },
-        {
-          "naam": "jus",
-          "hoeveelheid": 1,
-          "eenheid": "pak"
-        }
-      ],
-      "benodigdheden": [
-        "grote pan voor de aardappelen",
-        "pan voor de rookworst",
-        "stamper"
-      ],
-      "voorbereiding": [
-        "Schil de aardappelen en snijd ze in vieren."
-      ],
-      "stappen": [
-        "Doe de aardappelen in de grote pan met water tot ze net onder staan en een snuf zout. Breng aan de kook.",
-        "Leg 500 g boerenkool bovenop de aardappelen, doe de deksel erop en kook 20 minuten op middelhoog vuur tot de aardappelen zacht zijn als je er met een mes in prikt.",
-        "Verwarm intussen de 2 rookworsten in een pan met heet water, niet koken, 15 minuten.",
-        "Giet de aardappelen en boerenkool af.",
-        "Doe 30 g boter en 0,2 l warme melk erbij en stamp 2 minuten tot een smeuïge stamppot. Proef en voeg zout en peper toe.",
-        "Maak de jus volgens het pak, meestal 2 minuten roeren in heet water.",
-        "Opdienen met plakjes rookworst en een kuiltje jus. Voor de kleinste de rookworst ontvellen en in kleine stukjes snijden."
-      ]
-    },
-    {
-      "datum": "2026-11-14",
-      "gerecht": "Milde Marokkaanse gehaktballetjes in tomatensaus met couscous",
-      "tijd": 40,
-      "kosten": 8.5,
-      "bonus": [],
-      "nieuw": true,
-      "porties": 4,
-      "kindertip": "Rol samen met de kinderen de balletjes; de kleinste krijgt ze in vieren gesneden.",
+      "kindertip": "Maak een paar mini-gehaktballetjes voor de kleintjes. Rode kool en aardappel samen fijnprakken voor de 1-jarige; geen extra zout aan zijn portie.",
       "ingredienten": [
         {
           "naam": "rundergehakt",
           "hoeveelheid": 500,
           "eenheid": "g"
-        },
-        {
-          "naam": "couscous",
-          "hoeveelheid": 300,
-          "eenheid": "g"
-        },
-        {
-          "naam": "tomatenblokjes",
-          "hoeveelheid": 1,
-          "eenheid": "blik"
-        },
-        {
-          "naam": "ui",
-          "hoeveelheid": 1,
-          "eenheid": "stuks"
-        },
-        {
-          "naam": "courgette",
-          "hoeveelheid": 1,
-          "eenheid": "stuks"
         },
         {
           "naam": "eieren",
@@ -368,102 +458,109 @@
           "eenheid": "g"
         },
         {
-          "naam": "ras el hanout",
+          "naam": "rode kool",
           "hoeveelheid": 1,
           "eenheid": "pot"
         },
         {
-          "naam": "kipbouillonblokje",
+          "naam": "appels",
+          "hoeveelheid": 2,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "aardappelen",
           "hoeveelheid": 1,
-          "eenheid": "stuks"
-        }
-      ],
-      "benodigdheden": [
-        "hapjespan met deksel",
-        "kom",
-        "waterkoker",
-        "kom met deksel voor de couscous"
-      ],
-      "voorbereiding": [
-        "Snijd de ui in kleine blokjes.",
-        "Snijd de courgette in blokjes van 1 cm.",
-        "Meng het gehakt met 1 ei, 30 g paneermeel, 1 tl ras el hanout en een snuf zout. Rol er ongeveer 24 balletjes van, zo groot als een walnoot."
-      ],
-      "stappen": [
-        "Verhit 1 el olie in de hapjespan op middelhoog vuur. Bak de balletjes 6 minuten tot ze rondom bruin zijn. Haal ze uit de pan.",
-        "Bak in dezelfde pan de ui en de courgette 4 minuten tot ze zacht beginnen te worden.",
-        "Roer 1 blik tomatenblokjes en 1 tl ras el hanout erdoor. Breng aan de kook.",
-        "Leg de balletjes terug in de saus, doe de deksel erop en laat 12 minuten zachtjes pruttelen op laag vuur, tot de balletjes van binnen niet meer roze zijn.",
-        "Los intussen het bouillonblokje op in 350 ml kokend water. Giet dit over 300 g couscous in een kom, deksel erop en laat 5 minuten staan.",
-        "Roer de couscous los met een vork en een klontje boter.",
-        "Opdienen: couscous met balletjes en saus. Voor de kleinste de balletjes in vieren snijden en de saus laten afkoelen."
-      ]
-    },
-    {
-      "datum": "2026-11-15",
-      "gerecht": "Zalm uit de oven met krieltjes en broccoli",
-      "tijd": 35,
-      "kosten": 12.0,
-      "bonus": [],
-      "nieuw": false,
-      "porties": 4,
-      "kindertip": "Zalm valt in vlokken uit elkaar; makkelijk voor de kleinste.",
-      "ingredienten": [
-        {
-          "naam": "zalmfilet",
-          "hoeveelheid": 4,
-          "eenheid": "stuks"
-        },
-        {
-          "naam": "krieltjes",
-          "hoeveelheid": 750,
-          "eenheid": "g"
-        },
-        {
-          "naam": "broccoli",
-          "hoeveelheid": 500,
-          "eenheid": "g"
-        },
-        {
-          "naam": "citroen",
-          "hoeveelheid": 1,
-          "eenheid": "stuks"
+          "eenheid": "kg"
         },
         {
           "naam": "boter",
-          "hoeveelheid": 20,
+          "hoeveelheid": 40,
           "eenheid": "g"
         }
       ],
       "benodigdheden": [
-        "ovenschaal",
-        "bakplaat met bakpapier",
-        "pan voor de broccoli"
+        "braadpan of hapjespan met deksel",
+        "pan voor de aardappelen",
+        "steelpan voor de rode kool",
+        "kom"
       ],
       "voorbereiding": [
-        "Verwarm de oven voor op 200 graden.",
-        "Snijd de broccoli in kleine roosjes.",
-        "Halveer de krieltjes."
+        "Schil de aardappelen en snijd ze in gelijke stukken.",
+        "Schil 2 appels, haal het klokhuis eruit en snijd ze in blokjes.",
+        "Meng in een kom 500 g gehakt met 1 ei, 30 g paneermeel, een snufje peper en nootmuskaat. Draai er 8 ballen van (en een paar kleine voor de kinderen)."
       ],
       "stappen": [
-        "Leg de krieltjes op de bakplaat, besprenkel met 2 el olie en een snuf zout. Bak 15 minuten in de oven op 200 graden.",
-        "Leg de 4 zalmfilets in de ovenschaal met een snuf zout en een paar schijfjes citroen erop.",
-        "Zet de zalm naast de krieltjes in de oven en bak beide nog 12 minuten. De zalm is goed als hij in het midden lichtroze is en makkelijk uit elkaar valt.",
-        "Breng intussen een laagje water aan de kook en kook de broccoli 5 minuten met de deksel erop tot hij net zacht is.",
-        "Giet de broccoli af en schep er 20 g boter door.",
-        "Haal alles uit de oven en knijp wat citroen over de zalm.",
-        "Opdienen. Voor de kleinste de zalm in vlokken prakken, controleren op graatjes en de krieltjes in kleine stukjes snijden."
+        "Smelt 40 g boter in de braadpan op middelhoog vuur. Bak de gehaktballen 8 minuten rondom bruin.",
+        "Giet 200 ml water bij de gehaktballen, doe de deksel op de pan en laat 20 minuten zachtjes stoven op laag vuur. Keer ze halverwege om.",
+        "Zet de aardappelen op in een pan met koud water. Breng aan de kook en kook ze 20 minuten tot ze gaar zijn.",
+        "Doe de pot rode kool met de appelblokjes in de steelpan. Warm 10 minuten op laag vuur tot de appel zacht is. Roer af en toe.",
+        "Giet de aardappelen af en laat ze 1 minuut droogstomen in de pan.",
+        "Proef de jus bij de gehaktballen. Is hij te dun, laat dan 3 minuten zonder deksel inkoken.",
+        "Opdienen: aardappelen, rode kool en een gehaktbal met jus. Voor de 1-jarige een mini-balletje in kleine stukjes en aardappel met rode kool fijngeprakt."
       ]
     }
   ],
   "recepten": [
     {
-      "gerecht": "Nasi met kip en milde satésaus",
-      "tijd": 30,
-      "kosten": 8.0,
-      "bonus": [],
+      "gerecht": "Vissticks met aardappelpuree en worteltjes",
+      "tijd": 25,
+      "kosten": 6.5,
       "porties": 4,
-      "kindertip": "Saus apart zetten; kinderen dippen graag.",
+      "bonus": [],
+      "kindertip": "Vissticks in kleine stukjes voor de 1-jarige; puree zonder extra zout.",
+      "ingredienten": [
+        {
+          "naam": "vissticks",
+          "hoeveelheid": 1,
+          "eenheid": "pak"
+        },
+        {
+          "naam": "aardappelen",
+          "hoeveelheid": 1,
+          "eenheid": "kg"
+        },
+        {
+          "naam": "winterpeen",
+          "hoeveelheid": 500,
+          "eenheid": "g"
+        },
+        {
+          "naam": "melk",
+          "hoeveelheid": 150,
+          "eenheid": "ml"
+        },
+        {
+          "naam": "boter",
+          "hoeveelheid": 30,
+          "eenheid": "g"
+        }
+      ],
+      "benodigdheden": [
+        "pan voor de aardappelen",
+        "pan voor de worteltjes",
+        "koekenpan",
+        "pureestamper"
+      ],
+      "voorbereiding": [
+        "Schil de aardappelen en snijd ze in stukken.",
+        "Schil de winterpeen en snijd hem in plakjes."
+      ],
+      "stappen": [
+        "Kook de aardappelen 20 minuten in water tot ze gaar zijn.",
+        "Kook de worteltjes 10 minuten in een laagje water tot ze zacht zijn.",
+        "Bak de vissticks in 2 el olie op middelhoog vuur 4 minuten per kant tot ze goudbruin zijn.",
+        "Giet de aardappelen af en stamp ze met 150 ml warme melk en 30 g boter tot een gladde puree.",
+        "Giet de worteltjes af.",
+        "Opdienen: puree, worteltjes en vissticks. Voor de kleinste de visstick in stukjes en de worteltjes fijngeprakt."
+      ]
+    },
+    {
+      "gerecht": "Mexicaanse rijstschotel met gehakt, mais en bonen",
+      "tijd": 30,
+      "kosten": 7.0,
+      "porties": 4,
+      "bonus": [],
+      "kindertip": "Gebruik milde kruiden; geraspte kaas erover maakt het voor de kinderen extra lekker.",
       "ingredienten": [
         {
           "naam": "rijst",
@@ -471,116 +568,28 @@
           "eenheid": "g"
         },
         {
-          "naam": "kipfilet",
+          "naam": "rundergehakt",
           "hoeveelheid": 400,
           "eenheid": "g"
         },
         {
-          "naam": "nasigroente",
-          "hoeveelheid": 400,
-          "eenheid": "g"
-        },
-        {
-          "naam": "satésaus",
+          "naam": "mais",
           "hoeveelheid": 1,
-          "eenheid": "pot"
+          "eenheid": "blik"
         },
         {
-          "naam": "eieren",
-          "hoeveelheid": 2,
-          "eenheid": "stuks"
-        }
-      ],
-      "benodigdheden": [
-        "pan voor de rijst",
-        "wok of grote koekenpan",
-        "steelpan"
-      ],
-      "voorbereiding": [
-        "Snijd de kip in blokjes."
-      ],
-      "stappen": [
-        "Kook 300 g rijst 12 minuten en giet af.",
-        "Verhit 1 el olie in de wok op hoog vuur. Bak de kip 6 minuten tot hij rondom bruin is.",
-        "Doe 400 g nasigroente erbij en roerbak 4 minuten tot de groente zacht is.",
-        "Schep de rijst erdoor en roerbak 4 minuten tot alles warm is.",
-        "Bak 2 eieren als spiegelei in 3 minuten op middelhoog vuur.",
-        "Verwarm de satésaus 3 minuten in een steelpan op laag vuur.",
-        "Opdienen met een ei erop en de saus apart. Voor de kleinste zonder saus en kip klein gesneden."
-      ]
-    },
-    {
-      "gerecht": "Tortellini met pesto en courgette",
-      "tijd": 20,
-      "kosten": 7.0,
-      "bonus": [],
-      "porties": 4,
-      "kindertip": "Courgette in hele kleine blokjes, dan eet de peuter het ook.",
-      "ingredienten": [
-        {
-          "naam": "verse tortellini",
-          "hoeveelheid": 500,
-          "eenheid": "g"
-        },
-        {
-          "naam": "groene pesto",
+          "naam": "kidneybonen",
           "hoeveelheid": 1,
-          "eenheid": "pot"
+          "eenheid": "blik"
         },
         {
-          "naam": "courgette",
+          "naam": "tomatenblokjes",
           "hoeveelheid": 1,
-          "eenheid": "stuks"
-        },
-        {
-          "naam": "cherrytomaten",
-          "hoeveelheid": 250,
-          "eenheid": "g"
-        },
-        {
-          "naam": "geraspte kaas",
-          "hoeveelheid": 50,
-          "eenheid": "g"
-        }
-      ],
-      "benodigdheden": [
-        "pan voor de tortellini",
-        "koekenpan"
-      ],
-      "voorbereiding": [
-        "Snijd de courgette in blokjes.",
-        "Halveer de cherrytomaten."
-      ],
-      "stappen": [
-        "Breng een pan water aan de kook.",
-        "Verhit 1 el olie in de koekenpan op middelhoog vuur. Bak de courgette 5 minuten tot hij zacht en licht bruin is.",
-        "Doe de cherrytomaten erbij en bak 2 minuten mee.",
-        "Kook de tortellini 3 minuten in het kokende water tot ze bovenkomen en giet af.",
-        "Schep de tortellini en 4 el pesto door de groente en warm 1 minuut mee.",
-        "Opdienen met geraspte kaas. Voor de kleinste de tortellini halveren."
-      ]
-    },
-    {
-      "gerecht": "Ovenschotel met kip, zoete aardappel en paprika",
-      "tijd": 35,
-      "kosten": 9.0,
-      "bonus": [],
-      "porties": 4,
-      "kindertip": "Zoete aardappel is zacht en zoet, ideaal voor de kleinste.",
-      "ingredienten": [
-        {
-          "naam": "kipfilet",
-          "hoeveelheid": 400,
-          "eenheid": "g"
-        },
-        {
-          "naam": "zoete aardappelen",
-          "hoeveelheid": 800,
-          "eenheid": "g"
+          "eenheid": "blik"
         },
         {
           "naam": "paprika",
-          "hoeveelheid": 2,
+          "hoeveelheid": 1,
           "eenheid": "stuks"
         },
         {
@@ -595,21 +604,73 @@
         }
       ],
       "benodigdheden": [
-        "ovenschaal",
-        "snijplank"
+        "pan voor de rijst",
+        "grote hapjespan",
+        "vergiet"
       ],
       "voorbereiding": [
-        "Verwarm de oven voor op 210 graden.",
-        "Schil de zoete aardappelen en snijd ze in blokjes van 2 cm.",
-        "Snijd kip, paprika en ui in blokjes."
+        "Snijd de ui en paprika in blokjes.",
+        "Spoel mais en bonen af in het vergiet."
       ],
       "stappen": [
-        "Meng alles in de ovenschaal met 2 el olie, 1 tl paprikapoeder en een snuf zout.",
-        "Bak 20 minuten in de oven op 210 graden.",
-        "Schep om en bestrooi met 75 g geraspte kaas.",
-        "Bak nog 8 minuten tot de kaas gesmolten en goudbruin is en de zoete aardappel zacht is als je erin prikt.",
-        "Laat 2 minuten staan.",
-        "Opdienen. Voor de kleinste alles in kleine stukjes prakken en laten afkoelen."
+        "Kook 300 g rijst 12 minuten in 450 ml water met de deksel erop op laag vuur.",
+        "Bak in de hapjespan 400 g gehakt rul op hoog vuur, 5 minuten.",
+        "Doe ui en paprika erbij en bak 4 minuten mee.",
+        "Voeg 1 tl paprikapoeder, 1/2 tl komijn, tomatenblokjes, mais en bonen toe en laat 6 minuten pruttelen.",
+        "Schep de rijst erdoor en strooi 75 g kaas erover; deksel erop, 2 minuten tot de kaas smelt.",
+        "Opdienen in diepe borden. Voor de kleinste de bonen even fijnprakken."
+      ]
+    },
+    {
+      "gerecht": "Gnocchi uit de oven met tomaat en mozzarella",
+      "tijd": 25,
+      "kosten": 6.0,
+      "porties": 4,
+      "bonus": [],
+      "kindertip": "Gnocchi in halfjes snijden voor de 1-jarige, zodat hij zich niet verslikt.",
+      "ingredienten": [
+        {
+          "naam": "gnocchi",
+          "hoeveelheid": 1,
+          "eenheid": "kg"
+        },
+        {
+          "naam": "tomatenblokjes",
+          "hoeveelheid": 2,
+          "eenheid": "blik"
+        },
+        {
+          "naam": "mozzarella",
+          "hoeveelheid": 2,
+          "eenheid": "stuks"
+        },
+        {
+          "naam": "spinazie",
+          "hoeveelheid": 300,
+          "eenheid": "g"
+        },
+        {
+          "naam": "ui",
+          "hoeveelheid": 1,
+          "eenheid": "stuks"
+        }
+      ],
+      "benodigdheden": [
+        "oven",
+        "ovenschaal",
+        "koekenpan"
+      ],
+      "voorbereiding": [
+        "Verwarm de oven voor op 220 °C.",
+        "Snijd de ui in blokjes en scheur de mozzarella in stukjes."
+      ],
+      "stappen": [
+        "Bak de ui in 1 el olie op middelhoog vuur 4 minuten tot hij glazig is.",
+        "Doe de tomatenblokjes erbij en laat 5 minuten pruttelen.",
+        "Roer de spinazie erdoor tot hij geslonken is, 2 minuten.",
+        "Schep de ongekookte gnocchi door de saus in de ovenschaal en leg de mozzarella erop.",
+        "Bak 15 minuten in de oven op 220 °C tot de kaas gesmolten en goudbruin is.",
+        "Opdienen. Voor de kleinste de gnocchi in halfjes en even laten afkoelen."
       ]
     }
   ]
